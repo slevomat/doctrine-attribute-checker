@@ -16,6 +16,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Webmozart\Assert\Assert;
 use function array_values;
+use function dirname;
 use function realpath;
 use function sprintf;
 use function sys_get_temp_dir;
@@ -101,6 +102,27 @@ class CheckAttributesCommandTest extends TestCase
 
 		self::assertSame(Command::SUCCESS, $status, $tester->getDisplay());
 		self::assertStringContainsString('[OK] No errors found.', $tester->getDisplay());
+	}
+
+	public function testBaselinePathsAreRelativeToRootDirectory(): void
+	{
+		$configurationFile = sprintf('%s/build/checker/doctrine-attributes.neon', $this->directory);
+		FileSystem::write($configurationFile, sprintf(
+			"%s\nrootDirectory: %s\n%s",
+			self::BASE_CONFIGURATION,
+			dirname(__DIR__, 2),
+			self::CONFIGURATION,
+		));
+		$tester = $this->createTester();
+
+		$status = $tester->execute(['--configuration' => $configurationFile, '--generate-baseline' => true]);
+
+		self::assertSame(Command::SUCCESS, $status, $tester->getDisplay());
+		$baseline = Neon::decodeFile(sprintf('%s/build/checker/build/baseline.neon', $this->directory));
+		Assert::isArray($baseline);
+		Assert::isList($baseline['ignoreErrors']);
+		Assert::isArray($baseline['ignoreErrors'][0]);
+		self::assertSame('tests/Checker/data/DoctrineAttributeCheckerEntities.php', $baseline['ignoreErrors'][0]['path']);
 	}
 
 	public function testGenerateBaselineToExplicitFile(): void

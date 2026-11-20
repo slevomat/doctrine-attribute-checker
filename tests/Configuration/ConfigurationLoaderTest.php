@@ -108,6 +108,36 @@ class ConfigurationLoaderTest extends TestCase
 		]);
 	}
 
+	public function testRootDirectoryIsRelativeToConfigurationFile(): void
+	{
+		$file = sprintf('%s/build/checker/doctrine-attributes.neon', $this->directory);
+		FileSystem::write($file, <<<'NEON'
+			rootDirectory: ../..
+			baseline: baseline.neon
+			entityManagerLoader: entity-manager.php
+			NEON);
+
+		$configuration = (new ConfigurationLoader())->load($file);
+
+		self::assertSame($this->directory, $configuration->rootDirectory);
+		self::assertSame(sprintf('%s/build/checker/baseline.neon', $this->directory), $configuration->baselineFile);
+		self::assertSame(
+			sprintf('%s/build/checker/entity-manager.php', $this->directory),
+			$configuration->entityManagerLoader,
+		);
+	}
+
+	public function testMissingRootDirectory(): void
+	{
+		$file = sprintf('%s/doctrine-attributes.neon', $this->directory);
+		FileSystem::write($file, "rootDirectory: missing\n");
+
+		$this->expectException(CheckerException::class);
+		$this->expectExceptionMessage('Root directory');
+
+		(new ConfigurationLoader())->load($file);
+	}
+
 	public function testDefaultConfigurationFileIsOptional(): void
 	{
 		$configuration = (new ConfigurationLoader())->load();

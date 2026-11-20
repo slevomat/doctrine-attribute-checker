@@ -68,7 +68,10 @@ are checked only with `--db`.
 The command reads `doctrine-attributes.neon` from the current working directory (or the file given by
 `--configuration`). The file is merged on top of [`config/default.neon`](config/default.neon), which documents
 all options. Nested mappings are merged, lists are replaced and `ignoreErrors` entries from all files are
-concatenated. Relative paths are resolved against the directory of the main configuration file.
+concatenated. Relative paths in the configuration (`includes`, `rootDirectory`, `entityManagerLoader`, `baseline`)
+are resolved against the directory of the configuration file. Paths in `ignoreErrors` and in a generated baseline
+are relative to `rootDirectory`, which defaults to the directory of the main configuration file; set it when
+the configuration does not live in the project root (e.g. `rootDirectory: ../..`).
 
 ```neon
 includes:

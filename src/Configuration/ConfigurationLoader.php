@@ -18,6 +18,7 @@ use function getcwd;
 use function implode;
 use function in_array;
 use function is_array;
+use function is_dir;
 use function is_file;
 use function is_string;
 use function realpath;
@@ -32,6 +33,7 @@ use const DIRECTORY_SEPARATOR;
  *
  * @phpstan-type ConfigurationData array{
  *     rules: object{disabled: list<string>},
+ *     rootDirectory: ?string,
  *     entityManagerLoader: ?string,
  *     baseline: ?string,
  *     attributes: object{
@@ -186,7 +188,7 @@ final class ConfigurationLoader
 	/**
 	 * @param RawConfiguration $data
 	 */
-	private function create(array $data, string $rootDirectory): Configuration
+	private function create(array $data, string $configurationDirectory): Configuration
 	{
 		try {
 			/** @var ConfigurationData $normalized */
@@ -198,13 +200,24 @@ final class ConfigurationLoader
 			);
 		}
 
+		$rootDirectory = $configurationDirectory;
+		if ($normalized['rootDirectory'] !== null) {
+			$configuredRootDirectory = $this->resolvePath($configurationDirectory, $normalized['rootDirectory']);
+			$canonicalRootDirectory = realpath($configuredRootDirectory);
+			if ($canonicalRootDirectory === false || !is_dir($canonicalRootDirectory)) {
+				throw new CheckerException(sprintf('Root directory %s does not exist.', $configuredRootDirectory));
+			}
+
+			$rootDirectory = $canonicalRootDirectory;
+		}
+
 		$baselineFile = $normalized['baseline'] === null
 			? null
-			: $this->resolvePath($rootDirectory, $normalized['baseline']);
+			: $this->resolvePath($configurationDirectory, $normalized['baseline']);
 
 		$entityManagerLoader = $normalized['entityManagerLoader'] === null
 			? null
-			: $this->resolvePath($rootDirectory, $normalized['entityManagerLoader']);
+			: $this->resolvePath($configurationDirectory, $normalized['entityManagerLoader']);
 
 		$configuration = new Configuration(
 			$rootDirectory,
@@ -256,6 +269,7 @@ final class ConfigurationLoader
 			'rules' => Expect::structure([
 				'disabled' => $stringList(),
 			]),
+			'rootDirectory' => Expect::string()->nullable(),
 			'entityManagerLoader' => Expect::string()->nullable(),
 			'baseline' => Expect::string()->nullable(),
 			'attributes' => Expect::structure([

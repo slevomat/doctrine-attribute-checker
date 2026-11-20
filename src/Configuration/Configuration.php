@@ -17,7 +17,7 @@ final class Configuration
 	private array $additionalReservedWordsIndex = [];
 
 	/**
-	 * @param string $rootDirectory Directory of the main configuration file; base for relative paths.
+	 * @param string $rootDirectory Project root; base for paths in ignoreErrors and in a generated baseline.
 	 * @param list<string> $disabledRules
 	 * @param list<string> $forbiddenAttributes
 	 * @param array<string, array<string, list<string>>> $allowedLifecycleCallbacks Entity class => method => events.

@@ -6,6 +6,10 @@ rules:
 	# Rule identifiers that are neither reported nor fixed; a trailing * matches a rule prefix (e.g. database.*).
 	disabled: []
 
+# Project root; paths in ignoreErrors and in a generated baseline are relative to it.
+# Relative to the configuration file; defaults to the directory of the configuration file.
+rootDirectory: null
+
 # PHP file returning the Doctrine\ORM\EntityManagerInterface (or a CheckerEnvironment with additional schema
 # sources); required by the standalone bin/doctrine-attribute-checker. Relative to the configuration file.
 entityManagerLoader: null
@@ -94,5 +98,5 @@ identifiers:
 	# Identifiers that must be escaped with backticks in addition to the MySQL reserved words.
 	additionalReservedWords: []
 
-# Known violations; each entry has rule, target, path (relative to the configuration file) and message.
+# Known violations; each entry has rule, target, path (relative to rootDirectory) and message.
 ignoreErrors: []
