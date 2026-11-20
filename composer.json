@@ -1,0 +1,54 @@
+{
+	"name": "slevomat/doctrine-attribute-checker",
+	"description": "Checks and fixes Doctrine ORM mapping attributes against coding rules and the MySQL database schema.",
+	"type": "library",
+	"license": "MIT",
+	"keywords": ["doctrine", "orm", "attributes", "mapping", "mysql", "static analysis"],
+	"require": {
+		"php": "^8.4",
+		"doctrine/dbal": "^4.6",
+		"doctrine/orm": "^3.5",
+		"doctrine/persistence": "^3.0 || ^4.0",
+		"nette/neon": "^3.4 || ^4.0",
+		"nette/schema": "^1.3",
+		"nette/utils": "^4.0",
+		"nikic/php-parser": "^5.4",
+		"symfony/console": "^7.3 || ^8.0",
+		"webmozart/assert": "^1.11 || ^2.0"
+	},
+	"require-dev": {
+		"phpstan/phpstan": "^2.1",
+		"phpstan/phpstan-phpunit": "^2.0",
+		"phpstan/phpstan-strict-rules": "^2.0",
+		"phpunit/phpunit": "^12.0 || ^13.0",
+		"slevomat/coding-standard": "^8.20",
+		"squizlabs/php_codesniffer": "^4.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Slevomat\\DoctrineAttributeChecker\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"Slevomat\\DoctrineAttributeChecker\\": "tests/"
+		}
+	},
+	"config": {
+		"sort-packages": true,
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	},
+	"scripts": {
+		"check": [
+			"@phpcs",
+			"@phpstan",
+			"@tests"
+		],
+		"phpcs": "phpcs",
+		"phpcbf": "phpcbf",
+		"phpstan": "phpstan analyse --memory-limit=1G",
+		"tests": "phpunit"
+	}
+}

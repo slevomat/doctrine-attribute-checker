@@ -1,0 +1,94 @@
+# Default configuration of the Doctrine attribute checker.
+# A project configuration file is merged on top of it: nested mappings are merged, lists are replaced
+# and ignoreErrors entries from all files are concatenated.
+
+rules:
+	# Rule identifiers that are neither reported nor fixed; a trailing * matches a rule prefix (e.g. database.*).
+	disabled: []
+
+# File written by --generate-baseline when the option has no value; relative to the configuration file.
+baseline: null
+
+attributes:
+	# Doctrine mapping attributes (short names) that must not be used at all.
+	forbidden:
+		- AssociationOverride
+		- AssociationOverrides
+		- AttributeOverride
+		- AttributeOverrides
+		- ChangeTrackingPolicy
+		- CustomIdGenerator
+		- DiscriminatorColumn
+		- DiscriminatorMap
+		- EntityListeners
+		- Index
+		- InheritanceType
+		- NamedNativeQuery
+		- NamedQuery
+		- SequenceGenerator
+		- SqlResultSetMapping
+		- UniqueConstraint
+		- Version
+
+	# Lifecycle callbacks are forbidden except for the listed entity methods and events, e.g.
+	#	App\Product:
+	#		onPreRemove: [PreRemove]
+	# Listed entities may also declare HasLifecycleCallbacks.
+	allowedLifecycleCallbacks: []
+
+	# When false, Entity.repositoryClass is forbidden (the configured default repository class is reported as redundant).
+	allowCustomRepositoryClass: false
+
+column:
+	argumentOrder:
+		- name
+		- type
+		- enumType
+		- length
+		- precision
+		- scale
+		- unique
+		- columnDefinition
+		- options
+	optionOrder:
+		- unsigned
+		- fixed
+		- collation
+	# Column.options keys that are removed by --fix (rule column.options.<name>).
+	forbiddenOptions:
+		- nullable
+		- default
+		- comment
+	# Column arguments that must not be used (rule column.<name>).
+	forbiddenArguments:
+		- insertable
+		- updatable
+		- generated
+
+table:
+	# Table arguments that must not be used (rule table.<name>).
+	forbiddenArguments:
+		- indexes
+		- options
+
+association:
+	cascadeOrder:
+		- persist
+		- remove
+		- refresh
+		- detach
+		- merge
+		- all
+
+cache:
+	# Cache arguments that must not be used (rule cache.<name>).
+	forbiddenArguments:
+		- region
+		- usage
+
+identifiers:
+	# Identifiers that must be escaped with backticks in addition to the MySQL reserved words.
+	additionalReservedWords: []
+
+# Known violations; each entry has rule, target, path (relative to the configuration file) and message.
+ignoreErrors: []
