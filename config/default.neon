@@ -6,6 +6,10 @@ rules:
 	# Rule identifiers that are neither reported nor fixed; a trailing * matches a rule prefix (e.g. database.*).
 	disabled: []
 
+# PHP file returning the Doctrine\ORM\EntityManagerInterface (or a CheckerEnvironment with additional schema
+# sources); required by the standalone bin/doctrine-attribute-checker. Relative to the configuration file.
+entityManagerLoader: null
+
 # File written by --generate-baseline when the option has no value; relative to the configuration file.
 baseline: null
 

@@ -16,33 +16,44 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
 composer require --dev slevomat/doctrine-attribute-checker
 ```
 
-Register the Symfony Console command in your application. It needs the `EntityManagerInterface`;
-additional databases whose tables should be found when they are missing in the primary one can be passed
-as `SchemaSource` instances:
+Create a PHP file returning your `Doctrine\ORM\EntityManagerInterface` and reference it from
+`doctrine-attributes.neon` in the project root (the same idea as `objectManagerLoader` of phpstan-doctrine):
 
 ```php
-use Slevomat\DoctrineAttributeChecker\Console\CheckAttributesCommand;
-use Slevomat\DoctrineAttributeChecker\Database\SchemaSource;
+<?php // build/entity-manager.php
 
-$application->addCommand(new CheckAttributesCommand(
-	$entityManager,
-	[new SchemaSource($otherConnection, '/* port 3307 */ ')], // optional
-));
+return $container->get(EntityManagerInterface::class);
 ```
 
-The optional `queryPrefix` argument of `SchemaSource` is prepended to every `information_schema` query
-(useful e.g. for routing hints).
+```neon
+entityManagerLoader: build/entity-manager.php
+```
+
+To compare with tables that live in other databases, return a `CheckerEnvironment` instead. Tables missing in the
+primary database are then looked up in the additional sources; the optional `queryPrefix` is prepended to every
+`information_schema` query (useful e.g. for routing hints):
+
+```php
+use Slevomat\DoctrineAttributeChecker\Console\CheckerEnvironment;
+use Slevomat\DoctrineAttributeChecker\Database\SchemaSource;
+
+return new CheckerEnvironment($entityManager, [new SchemaSource($otherConnection, '/* port 3307 */ ')]);
+```
+
+Alternatively, register `Slevomat\DoctrineAttributeChecker\Console\CheckAttributesCommand` in your own Symfony
+Console application and pass the entity manager (and schema sources) to its constructor; `entityManagerLoader`
+is then not needed.
 
 ## Usage
 
 ```bash
-bin/console orm:check-attributes                     # check all mapped entities
-bin/console orm:check-attributes src/Entity/User.php # check selected files
-bin/console orm:check-attributes --db                # include database schema rules
-bin/console orm:check-attributes --fix               # apply automatic fixes (never modifies the database)
-bin/console orm:check-attributes --db --generate-baseline            # write the configured baseline file
-bin/console orm:check-attributes --db --generate-baseline=other.neon # write a baseline to another file
-bin/console orm:check-attributes --configuration=path/to/config.neon
+vendor/bin/doctrine-attribute-checker                     # check all mapped entities
+vendor/bin/doctrine-attribute-checker src/Entity/User.php # check selected files
+vendor/bin/doctrine-attribute-checker --db                # include database schema rules
+vendor/bin/doctrine-attribute-checker --fix               # apply automatic fixes (never modifies the database)
+vendor/bin/doctrine-attribute-checker --db --generate-baseline            # write the configured baseline file
+vendor/bin/doctrine-attribute-checker --db --generate-baseline=other.neon # write a baseline to another file
+vendor/bin/doctrine-attribute-checker --configuration=path/to/config.neon
 ```
 
 `--generate-baseline` runs a full check and writes all current violations to the baseline file.
@@ -63,6 +74,7 @@ concatenated. Relative paths are resolved against the directory of the main conf
 includes:
 	- build/doctrine-attributes-baseline.neon
 
+entityManagerLoader: build/entity-manager.php
 baseline: build/doctrine-attributes-baseline.neon
 
 rules:

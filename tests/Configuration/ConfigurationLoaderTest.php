@@ -40,6 +40,7 @@ class ConfigurationLoaderTest extends TestCase
 
 		self::assertSame([], $configuration->disabledRules);
 		self::assertNull($configuration->baselineFile);
+		self::assertNull($configuration->entityManagerLoader);
 		self::assertContains('Index', $configuration->forbiddenAttributes);
 		self::assertSame([], $configuration->allowedLifecycleCallbacks);
 		self::assertFalse($configuration->allowCustomRepositoryClass);
@@ -69,6 +70,7 @@ class ConfigurationLoaderTest extends TestCase
 					- database.*
 
 			baseline: build/baseline.neon
+			entityManagerLoader: build/entity-manager.php
 
 			column:
 				optionOrder: [collation, unsigned]
@@ -90,6 +92,7 @@ class ConfigurationLoaderTest extends TestCase
 
 		self::assertSame($this->directory, $configuration->rootDirectory);
 		self::assertSame(sprintf('%s/build/baseline.neon', $this->directory), $configuration->baselineFile);
+		self::assertSame(sprintf('%s/build/entity-manager.php', $this->directory), $configuration->entityManagerLoader);
 		self::assertSame(['database.*'], $configuration->disabledRules);
 		self::assertFalse($configuration->isRuleEnabled('database.column-type'));
 		self::assertTrue($configuration->isRuleEnabled('column.type'));

@@ -34,6 +34,7 @@ final class Configuration
 	public function __construct(
 		public readonly string $rootDirectory,
 		public readonly array $disabledRules,
+		public readonly ?string $entityManagerLoader,
 		public readonly ?string $baselineFile,
 		public readonly array $forbiddenAttributes,
 		public readonly array $allowedLifecycleCallbacks,

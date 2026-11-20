@@ -24,6 +24,9 @@
 		"slevomat/coding-standard": "^8.20",
 		"squizlabs/php_codesniffer": "^4.0"
 	},
+	"bin": [
+		"bin/doctrine-attribute-checker"
+	],
 	"autoload": {
 		"psr-4": {
 			"Slevomat\\DoctrineAttributeChecker\\": "src/"

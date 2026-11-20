@@ -11,6 +11,7 @@ use Override;
 use PHPUnit\Framework\TestCase;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureBasicEntity;
 use Slevomat\DoctrineAttributeChecker\Checker\FixtureMetadata;
+use Slevomat\DoctrineAttributeChecker\CheckerException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Webmozart\Assert\Assert;
@@ -40,6 +41,8 @@ class CheckAttributesCommandTest extends TestCase
 		identifiers:
 			additionalReservedWords: [attribute_check_basic]
 		NEON;
+
+	public static ?EntityManagerInterface $loadedEntityManager = null;
 
 	private string $directory;
 
@@ -175,7 +178,45 @@ class CheckAttributesCommandTest extends TestCase
 		return $file;
 	}
 
+	public function testEntityManagerIsLoadedByConfiguredLoader(): void
+	{
+		self::$loadedEntityManager = $this->createEntityManager();
+		FileSystem::write(
+			sprintf('%s/build/entity-manager.php', $this->directory),
+			sprintf("<?php\n\nreturn \\%s::%s;\n", self::class, '$loadedEntityManager'),
+		);
+		$configurationFile = $this->writeConfiguration(sprintf(
+			"entityManagerLoader: build/entity-manager.php\n%s",
+			self::CONFIGURATION,
+		));
+		$tester = new CommandTester(new CheckAttributesCommand());
+
+		try {
+			$status = $tester->execute(['--configuration' => $configurationFile]);
+		} finally {
+			self::$loadedEntityManager = null;
+		}
+
+		self::assertSame(Command::FAILURE, $status);
+		self::assertStringContainsString('[ERROR] Found 1 error in 1 entity, 1 fixable with --fix.', $tester->getDisplay());
+	}
+
+	public function testEntityManagerLoaderIsRequiredWithoutEntityManager(): void
+	{
+		$configurationFile = $this->writeConfiguration(self::CONFIGURATION);
+
+		$this->expectException(CheckerException::class);
+		$this->expectExceptionMessage('Option entityManagerLoader must be configured');
+
+		(new CommandTester(new CheckAttributesCommand()))->execute(['--configuration' => $configurationFile]);
+	}
+
 	private function createTester(): CommandTester
+	{
+		return new CommandTester(new CheckAttributesCommand($this->createEntityManager()));
+	}
+
+	private function createEntityManager(): EntityManagerInterface
 	{
 		$configuration = FixtureMetadata::createOrmConfiguration();
 		$metadataByClassName = FixtureMetadata::load($configuration);
@@ -194,7 +235,7 @@ class CheckAttributesCommandTest extends TestCase
 				static fn (string $className): ClassMetadata => $metadataByClassName[$className],
 			);
 
-		return new CommandTester(new CheckAttributesCommand($entityManager));
+		return $entityManager;
 	}
 
 }

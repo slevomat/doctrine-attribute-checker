@@ -9,6 +9,7 @@ use Slevomat\DoctrineAttributeChecker\Baseline\Baseline;
 use Slevomat\DoctrineAttributeChecker\Baseline\BaselineWriter;
 use Slevomat\DoctrineAttributeChecker\Baseline\RelativePath;
 use Slevomat\DoctrineAttributeChecker\Checker\DoctrineAttributeChecker;
+use Slevomat\DoctrineAttributeChecker\CheckerException;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
@@ -44,12 +45,16 @@ final class CheckAttributesCommand extends Command
 	private const string DEFAULT_BASELINE_FILE = 'doctrine-attributes-baseline.neon';
 
 	/**
+	 * Without an entity manager, it is loaded by the entityManagerLoader file from the configuration
+	 * (used by the standalone bin/doctrine-attribute-checker).
+	 *
 	 * @param list<SchemaSource> $additionalSchemaSources Databases whose tables are used when missing in the primary one.
 	 */
 	public function __construct(
-		private readonly EntityManagerInterface $entityManager,
+		private readonly ?EntityManagerInterface $entityManager = null,
 		private readonly array $additionalSchemaSources = [],
 		private readonly ConfigurationLoader $configurationLoader = new ConfigurationLoader(),
+		private readonly EntityManagerLoader $entityManagerLoader = new EntityManagerLoader(),
 	)
 	{
 		parent::__construct();
@@ -73,6 +78,8 @@ final class CheckAttributesCommand extends Command
 	): int
 	{
 		$config = $this->configurationLoader->load($configuration);
+		$environment = $this->createEnvironment($config);
+		$entityManager = $environment->entityManager;
 
 		if ($generateBaseline !== false && ($fix || $files !== [])) {
 			$output->writeln('<error>--generate-baseline cannot be combined with --fix or with file arguments.</error>');
@@ -84,7 +91,7 @@ final class CheckAttributesCommand extends Command
 		$mappedClassNames = [];
 		$filesByClassName = [];
 		/** @var list<ClassMetadata<object>> $metadata */
-		$metadata = $this->entityManager->getMetadataFactory()->getAllMetadata();
+		$metadata = $entityManager->getMetadataFactory()->getAllMetadata();
 		foreach ($metadata as $classMetadata) {
 			$className = $classMetadata->name;
 			$metadataByClassName[$className] = $classMetadata;
@@ -102,12 +109,12 @@ final class CheckAttributesCommand extends Command
 		$selectedFiles = $this->selectFiles($filesByClassName, $files);
 
 		$checker = new DoctrineAttributeChecker(
-			$this->entityManager,
+			$entityManager,
 			$config,
 			new AttributeSourceEditor(),
 			$metadataByClassName,
 			$mappedClassNames,
-			$db ? $this->loadDatabaseSchema() : null,
+			$db ? $this->loadDatabaseSchema($environment) : null,
 		);
 		$violations = [];
 		$changedFiles = [];
@@ -269,10 +276,25 @@ final class CheckAttributesCommand extends Command
 		return $selectedFiles;
 	}
 
-	private function loadDatabaseSchema(): DatabaseSchemaSnapshot
+	private function createEnvironment(Configuration $config): CheckerEnvironment
 	{
-		$schema = DatabaseSchemaSnapshot::load($this->entityManager->getConnection());
-		foreach ($this->additionalSchemaSources as $source) {
+		if ($this->entityManager !== null) {
+			return new CheckerEnvironment($this->entityManager, $this->additionalSchemaSources);
+		}
+
+		if ($config->entityManagerLoader === null) {
+			throw new CheckerException(
+				'Option entityManagerLoader must be configured when the command is not registered with an entity manager.',
+			);
+		}
+
+		return $this->entityManagerLoader->load($config->entityManagerLoader);
+	}
+
+	private function loadDatabaseSchema(CheckerEnvironment $environment): DatabaseSchemaSnapshot
+	{
+		$schema = DatabaseSchemaSnapshot::load($environment->entityManager->getConnection());
+		foreach ($environment->additionalSchemaSources as $source) {
 			$schema = $schema->withSecondary(DatabaseSchemaSnapshot::load($source->connection, $source->queryPrefix));
 		}
 

@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php declare(strict_types = 1);
+
+use Slevomat\DoctrineAttributeChecker\Console\CheckAttributesCommand;
+use Symfony\Component\Console\Application;
+
+(static function (): void {
+	$autoloadFiles = [
+		$GLOBALS['_composer_autoload_path'] ?? null,
+		__DIR__ . '/../../../autoload.php',
+		__DIR__ . '/../vendor/autoload.php',
+	];
+	foreach ($autoloadFiles as $autoloadFile) {
+		if ($autoloadFile !== null && is_file($autoloadFile)) {
+			require_once $autoloadFile;
+			break;
+		}
+	}
+
+	if (!class_exists(CheckAttributesCommand::class)) {
+		fwrite(STDERR, "Composer autoloader not found; install dependencies with composer install.\n");
+		exit(1);
+	}
+
+	$command = new CheckAttributesCommand();
+	$application = new Application('Doctrine attribute checker');
+	$application->addCommand($command);
+	$application->setDefaultCommand((string) $command->getName(), true);
+	$application->run();
+})();

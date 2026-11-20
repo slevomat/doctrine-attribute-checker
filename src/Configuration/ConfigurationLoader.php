@@ -32,6 +32,7 @@ use const DIRECTORY_SEPARATOR;
  *
  * @phpstan-type ConfigurationData array{
  *     rules: object{disabled: list<string>},
+ *     entityManagerLoader: ?string,
  *     baseline: ?string,
  *     attributes: object{
  *         forbidden: list<string>,
@@ -201,9 +202,14 @@ final class ConfigurationLoader
 			? null
 			: $this->resolvePath($rootDirectory, $normalized['baseline']);
 
+		$entityManagerLoader = $normalized['entityManagerLoader'] === null
+			? null
+			: $this->resolvePath($rootDirectory, $normalized['entityManagerLoader']);
+
 		$configuration = new Configuration(
 			$rootDirectory,
 			$normalized['rules']->disabled,
+			$entityManagerLoader,
 			$baselineFile,
 			$normalized['attributes']->forbidden,
 			$normalized['attributes']->allowedLifecycleCallbacks,
@@ -250,6 +256,7 @@ final class ConfigurationLoader
 			'rules' => Expect::structure([
 				'disabled' => $stringList(),
 			]),
+			'entityManagerLoader' => Expect::string()->nullable(),
 			'baseline' => Expect::string()->nullable(),
 			'attributes' => Expect::structure([
 				'forbidden' => $stringList(),
