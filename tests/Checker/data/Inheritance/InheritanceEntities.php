@@ -41,3 +41,42 @@ class InheritanceSecondEntity extends InheritanceBaseEntity
 {
 
 }
+
+#[ORM\Entity]
+#[ORM\Table(name: 'inheritance_vehicle')]
+#[ORM\InheritanceType('SINGLE_TABLE')]
+#[ORM\DiscriminatorColumn(name: 'type')]
+#[ORM\DiscriminatorMap(['car' => InheritanceCarEntity::class, 'bike' => InheritanceBikeEntity::class])]
+abstract class InheritanceVehicleEntity
+{
+
+	#[ORM\Id]
+	#[ORM\Column(length: 36, options: ['fixed' => true])]
+	public string $id;
+
+	#[ORM\Column(length: 20)]
+	public string $name;
+
+}
+
+#[ORM\Entity]
+class InheritanceCarEntity extends InheritanceVehicleEntity
+{
+
+	#[ORM\Column(length: 10)]
+	public string $plate;
+
+	#[ORM\Column(length: 10, nullable: true)]
+	public ?string $color = null;
+
+	#[ORM\ManyToOne]
+	#[ORM\JoinColumn(nullable: false)]
+	public InheritanceTargetEntity $driver;
+
+}
+
+#[ORM\Entity]
+class InheritanceBikeEntity extends InheritanceVehicleEntity
+{
+
+}

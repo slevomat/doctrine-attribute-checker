@@ -11,12 +11,18 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\Mapping\UnderscoreNamingStrategy;
+use Nette\Utils\FileSystem;
 use PHPUnit\Framework\TestCase;
+use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseColumn;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
+use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
+use Slevomat\DoctrineAttributeChecker\Violation;
 use function array_values;
 use function explode;
+use function sprintf;
 use function str_contains;
+use function str_starts_with;
 use const CASE_LOWER;
 
 /**
@@ -112,6 +118,67 @@ abstract class FactoryMetadataTestCase extends TestCase
 			->willReturn($dbalConfiguration);
 
 		return $connection;
+	}
+
+	/**
+	 * @param class-string $className
+	 * @return array{contents: string, changed: bool, violations: list<Violation>}
+	 */
+	protected function inspectFixture(
+		string $directory,
+		string $file,
+		string $className,
+		DatabaseSchemaSnapshot $schema,
+		bool $fix,
+	): array
+	{
+		$entityManager = $this->createEntityManager($directory);
+		$checker = new DoctrineAttributeChecker(
+			$entityManager,
+			(new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile()),
+			new AttributeSourceEditor(),
+			$this->loadAll($entityManager),
+			[$className => true],
+			$schema,
+		);
+
+		return $checker->inspect(FileSystem::read($file), $file, $fix);
+	}
+
+	protected static function charColumn(int $length, bool $nullable): DatabaseColumn
+	{
+		return new DatabaseColumn('char', sprintf('char(%d)', $length), $length, null, null, $nullable, 'utf8mb4_general_ci');
+	}
+
+	protected static function varcharColumn(int $length, bool $nullable): DatabaseColumn
+	{
+		return new DatabaseColumn(
+			'varchar',
+			sprintf('varchar(%d)', $length),
+			$length,
+			null,
+			null,
+			$nullable,
+			'utf8mb4_general_ci',
+		);
+	}
+
+	/**
+	 * @param list<Violation> $violations
+	 * @return list<string>
+	 */
+	protected function formatViolations(array $violations, ?string $rulePrefix = null): array
+	{
+		$result = [];
+		foreach ($violations as $violation) {
+			if ($rulePrefix !== null && !str_starts_with($violation->rule, $rulePrefix)) {
+				continue;
+			}
+
+			$result[] = sprintf('%s: %s', $violation->rule, $violation->message);
+		}
+
+		return $result;
 	}
 
 }
