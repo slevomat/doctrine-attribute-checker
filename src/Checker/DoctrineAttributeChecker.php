@@ -1919,8 +1919,12 @@ final class DoctrineAttributeChecker
 			return;
 		}
 
+		$targets = $this->getDatabaseFieldTargets($context->classMetadata, $context->property->name);
+		$nullableInEmbeddingTable = $context->classMetadata->isEmbeddedClass
+			&& $this->hasNullableDatabaseColumn($databaseSchema, $targets);
+
 		$expectations = [];
-		foreach ($this->getDatabaseFieldTargets($context->classMetadata, $context->property->name) as $target) {
+		foreach ($targets as $target) {
 			array_push(
 				$expectations,
 				...$this->checkDatabaseColumnInTable(
@@ -1929,6 +1933,7 @@ final class DoctrineAttributeChecker
 					$target['table'],
 					$target['fieldMapping'],
 					$target['singleTableSubclass'],
+					nullableInEmbeddingTable: $nullableInEmbeddingTable,
 				),
 			);
 		}
@@ -1979,6 +1984,20 @@ final class DoctrineAttributeChecker
 		ksort($targets);
 
 		return array_values($targets);
+	}
+
+	/**
+	 * @param list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}> $targets
+	 */
+	private function hasNullableDatabaseColumn(DatabaseSchemaSnapshot $databaseSchema, array $targets): bool
+	{
+		foreach ($targets as $target) {
+			if ($databaseSchema->getColumn($target['table'], $target['fieldMapping']->columnName)?->nullable === true) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -2062,6 +2081,7 @@ final class DoctrineAttributeChecker
 		FieldMapping $fieldMapping,
 		bool $singleTableSubclass,
 		string $attributeName = 'Column',
+		bool $nullableInEmbeddingTable = false,
 	): array
 	{
 		$columnName = $fieldMapping->columnName;
@@ -2094,6 +2114,10 @@ final class DoctrineAttributeChecker
 			&& !(
 				$singleTableSubclass
 				&& $databaseColumn->nullable
+			)
+			&& !(
+				$nullableInEmbeddingTable
+				&& $fieldMapping->nullable
 			)
 		) {
 			$this->addViolation(

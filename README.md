@@ -17,7 +17,9 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
 - Columns of properties declared in a subclass of a single table inheritance hierarchy may be nullable in the database
   even when the property is not, because rows of the other subclasses do not fill them.
 - `Embeddable` classes are inspected too, although Doctrine does not list them among all metadata. Their properties are
-  compared with the columns of all entities that embed them (with any column prefix).
+  compared with the columns of all entities that embed them (with any column prefix). A nullable property may map
+  a `NOT NULL` column when the column of another embedding entity is nullable, because the embeddable is shared and
+  the stricter column only adds a database constraint.
 - `InheritanceType`, `DiscriminatorColumn` and `DiscriminatorMap` are forbidden by default; remove them from
   `attributes.forbidden` to use inheritance. `DiscriminatorColumn` is then compared with the database column like
   `Column` (existence, type, nullability, length, fixed and collation).

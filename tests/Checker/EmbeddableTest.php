@@ -53,14 +53,36 @@ final class EmbeddableTest extends FactoryMetadataTestCase
 		);
 	}
 
-	public function testNullabilityIsComparedWithColumnsOfEmbeddingEntities(): void
+	public function testNullablePropertyAllowsNotNullColumnWhenAnotherEmbeddingColumnIsNullable(): void
 	{
 		$result = $this->inspect($this->createEmbeddableSchema([
 			'embeddable_office.billing_zip' => self::varcharColumn(10, false),
 		]), false);
 
+		self::assertSame([], $this->formatViolations($result['violations'], 'database.'));
+	}
+
+	public function testNullablePropertyIsReportedWhenNoEmbeddingColumnIsNullable(): void
+	{
+		$result = $this->inspect($this->createEmbeddableSchema([
+			'embeddable_home.address_zip' => self::varcharColumn(10, false),
+			'embeddable_office.billing_zip' => self::varcharColumn(10, false),
+		]), false);
+
 		self::assertSame(
 			['database.column-nullability: PHP/Doctrine nullability is nullable but the database column is not nullable.'],
+			$this->formatViolations($result['violations'], 'database.'),
+		);
+	}
+
+	public function testNotNullablePropertyIsReportedForNullableEmbeddingColumn(): void
+	{
+		$result = $this->inspect($this->createEmbeddableSchema([
+			'embeddable_office.billing_city' => self::varcharColumn(80, true),
+		]), false);
+
+		self::assertSame(
+			['database.column-nullability: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}
