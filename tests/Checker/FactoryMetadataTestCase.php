@@ -13,6 +13,7 @@ use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\ORM\Mapping\UnderscoreNamingStrategy;
 use Nette\Utils\FileSystem;
 use PHPUnit\Framework\TestCase;
+use Slevomat\DoctrineAttributeChecker\Configuration\Configuration as CheckerConfiguration;
 use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseColumn;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
@@ -23,6 +24,8 @@ use function explode;
 use function sprintf;
 use function str_contains;
 use function str_starts_with;
+use function sys_get_temp_dir;
+use function uniqid;
 use const CASE_LOWER;
 
 /**
@@ -133,12 +136,13 @@ abstract class FactoryMetadataTestCase extends TestCase
 		string $className,
 		DatabaseSchemaSnapshot $schema,
 		bool $fix,
+		?string $configuration = null,
 	): array
 	{
 		$entityManager = $this->createEntityManager($directory);
 		$checker = new DoctrineAttributeChecker(
 			$entityManager,
-			(new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile()),
+			$this->loadConfiguration($configuration),
 			new AttributeSourceEditor(),
 			$this->loadAll($entityManager),
 			[$className => true],
@@ -146,6 +150,21 @@ abstract class FactoryMetadataTestCase extends TestCase
 		);
 
 		return $checker->inspect(FileSystem::read($file), $file, $fix);
+	}
+
+	private function loadConfiguration(?string $configuration): CheckerConfiguration
+	{
+		if ($configuration === null) {
+			return (new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile());
+		}
+
+		$file = sprintf('%s/%s.neon', sys_get_temp_dir(), uniqid('doctrine-attribute-checker-', true));
+		FileSystem::write($file, $configuration);
+		try {
+			return (new ConfigurationLoader())->load($file);
+		} finally {
+			FileSystem::delete($file);
+		}
 	}
 
 	protected static function charColumn(int $length, bool $nullable): DatabaseColumn
