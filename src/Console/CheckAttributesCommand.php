@@ -26,6 +26,7 @@ use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Output\OutputInterface;
 use function array_filter;
 use function array_push;
+use function array_shift;
 use function array_values;
 use function count;
 use function explode;
@@ -91,7 +92,7 @@ final class CheckAttributesCommand extends Command
 		$mappedClassNames = [];
 		$filesByClassName = [];
 		/** @var list<ClassMetadata<object>> $metadata */
-		$metadata = $entityManager->getMetadataFactory()->getAllMetadata();
+		$metadata = $this->addEmbeddableMetadata($entityManager, $entityManager->getMetadataFactory()->getAllMetadata());
 		foreach ($metadata as $classMetadata) {
 			$className = $classMetadata->name;
 			$metadataByClassName[$className] = $classMetadata;
@@ -241,6 +242,37 @@ final class CheckAttributesCommand extends Command
 		}
 
 		return self::SUCCESS;
+	}
+
+	/**
+	 * Doctrine does not list embeddable classes among all metadata, they are reachable only from embedding classes.
+	 *
+	 * @param list<ClassMetadata<object>> $metadata
+	 * @return list<ClassMetadata<object>>
+	 */
+	private function addEmbeddableMetadata(EntityManagerInterface $entityManager, array $metadata): array
+	{
+		$metadataByClassName = [];
+		foreach ($metadata as $classMetadata) {
+			$metadataByClassName[$classMetadata->name] = $classMetadata;
+		}
+
+		$pending = $metadata;
+		while ($pending !== []) {
+			$classMetadata = array_shift($pending);
+			foreach ($classMetadata->embeddedClasses as $embeddedClass) {
+				$embeddableClassName = $embeddedClass->class;
+				if (isset($metadataByClassName[$embeddableClassName])) {
+					continue;
+				}
+
+				$embeddableMetadata = $entityManager->getClassMetadata($embeddableClassName);
+				$metadataByClassName[$embeddableClassName] = $embeddableMetadata;
+				$pending[] = $embeddableMetadata;
+			}
+		}
+
+		return array_values($metadataByClassName);
 	}
 
 	/**

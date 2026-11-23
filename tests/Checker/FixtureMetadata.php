@@ -7,6 +7,7 @@ use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\DefaultTypedFieldMapper;
 use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 use Doctrine\Persistence\Mapping\RuntimeReflectionService;
+use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureAddress;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureAssociationEntity;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureBasicEntity;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureBooleanEntity;
@@ -40,6 +41,7 @@ final class FixtureMetadata
 	public static function load(Configuration $configuration): array
 	{
 		$classes = [
+			FixtureAddress::class,
 			FixtureAssociationEntity::class,
 			FixtureBasicEntity::class,
 			FixtureBooleanEntity::class,

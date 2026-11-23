@@ -12,6 +12,7 @@ parameters:
 	scanFiles:
 		- tests/Checker/data/DoctrineAttributeCheckerEntities.php
 		- tests/Checker/data/Inheritance/InheritanceEntities.php
+		- tests/Checker/data/Embeddable/EmbeddableEntities.php
 	excludePaths:
 		- tests/*/data/*
 	checkMissingOverrideMethodAttribute: true
