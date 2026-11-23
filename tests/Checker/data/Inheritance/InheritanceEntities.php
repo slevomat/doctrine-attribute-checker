@@ -45,7 +45,7 @@ class InheritanceSecondEntity extends InheritanceBaseEntity
 #[ORM\Entity]
 #[ORM\Table(name: 'inheritance_vehicle')]
 #[ORM\InheritanceType('SINGLE_TABLE')]
-#[ORM\DiscriminatorColumn(name: 'type')]
+#[ORM\DiscriminatorColumn(name: 'type', length: 20)]
 #[ORM\DiscriminatorMap(['car' => InheritanceCarEntity::class, 'bike' => InheritanceBikeEntity::class])]
 abstract class InheritanceVehicleEntity
 {

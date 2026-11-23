@@ -1247,6 +1247,12 @@ final class DoctrineAttributeChecker
 				$this->checkEmbedded($context);
 
 				return;
+			case 'DiscriminatorColumn':
+				if ($this->databaseSchema !== null) {
+					$this->checkDatabaseDiscriminatorColumn($context);
+				}
+
+				return;
 			case 'Entity':
 				$this->checkEntity($context);
 
@@ -2055,6 +2061,7 @@ final class DoctrineAttributeChecker
 		string $tableName,
 		FieldMapping $fieldMapping,
 		bool $singleTableSubclass,
+		string $attributeName = 'Column',
 	): array
 	{
 		$columnName = $fieldMapping->columnName;
@@ -2107,7 +2114,7 @@ final class DoctrineAttributeChecker
 			'unique',
 			$databaseSchema->isSingleColumnUnique($tableName, $columnName) ? true : null,
 			'database.column-unique',
-			'Column.unique must match the single-column unique index in the database.',
+			$attributeName . '.unique must match the single-column unique index in the database.',
 			$column,
 		);
 
@@ -2125,7 +2132,7 @@ final class DoctrineAttributeChecker
 					'length',
 					$databaseColumn->characterMaximumLength,
 					'database.column-length',
-					'Column.length must match the database column length.',
+					$attributeName . '.length must match the database column length.',
 					$column,
 				);
 			}
@@ -2135,7 +2142,7 @@ final class DoctrineAttributeChecker
 				'length',
 				null,
 				'database.column-length',
-				'Column.length is not applicable to this Doctrine/database type.',
+				$attributeName . '.length is not applicable to this Doctrine/database type.',
 				$column,
 			);
 		}
@@ -2153,7 +2160,7 @@ final class DoctrineAttributeChecker
 					'precision',
 					$databaseColumn->numericPrecision,
 					'database.column-precision',
-					'Column.precision must match the database column precision.',
+					$attributeName . '.precision must match the database column precision.',
 					$column,
 				);
 				$expectations[] = new DatabaseExpectation(
@@ -2161,7 +2168,7 @@ final class DoctrineAttributeChecker
 					'scale',
 					$databaseColumn->numericScale,
 					'database.column-scale',
-					'Column.scale must match the database column scale.',
+					$attributeName . '.scale must match the database column scale.',
 					$column,
 				);
 			}
@@ -2172,7 +2179,7 @@ final class DoctrineAttributeChecker
 					$argumentName,
 					null,
 					'database.column-' . $argumentName,
-					sprintf('Column.%s is not applicable to this Doctrine/database type.', $argumentName),
+					sprintf('%s.%s is not applicable to this Doctrine/database type.', $attributeName, $argumentName),
 					$column,
 				);
 			}
@@ -2188,7 +2195,7 @@ final class DoctrineAttributeChecker
 			'unsigned',
 			$isUnsigned ? true : null,
 			'database.column-unsigned',
-			'Column.options.unsigned must match the database column.',
+			$attributeName . '.options.unsigned must match the database column.',
 			$column,
 		);
 		$expectations[] = new DatabaseExpectation(
@@ -2196,7 +2203,7 @@ final class DoctrineAttributeChecker
 			'fixed',
 			$databaseColumn->dataType === 'char' ? true : null,
 			'database.column-fixed',
-			'Column.options.fixed must be true exactly for a database char column.',
+			$attributeName . '.options.fixed must be true exactly for a database char column.',
 			$column,
 		);
 
@@ -2207,7 +2214,7 @@ final class DoctrineAttributeChecker
 			'collation',
 			$columnCollation !== null && $columnCollation !== $tableCollation ? $columnCollation : null,
 			'database.column-collation',
-			'Column.options.collation must match a column-specific database collation.',
+			$attributeName . '.options.collation must match a column-specific database collation.',
 			$column,
 		);
 
@@ -2217,7 +2224,7 @@ final class DoctrineAttributeChecker
 				'columnDefinition',
 				'YEAR',
 				'database.column-definition',
-				'Column.columnDefinition must be YEAR for a database year column.',
+				$attributeName . '.columnDefinition must be YEAR for a database year column.',
 				$column,
 			)
 			: new DatabaseExpectation(
@@ -2225,11 +2232,44 @@ final class DoctrineAttributeChecker
 				'columnDefinition',
 				null,
 				'database.column-definition',
-				'Column.columnDefinition is allowed only for a database year column.',
+				$attributeName . '.columnDefinition is allowed only for a database year column.',
 				$column,
 			);
 
 		return $expectations;
+	}
+
+	private function checkDatabaseDiscriminatorColumn(DoctrineAttributeContext $context): void
+	{
+		$databaseSchema = $this->databaseSchema;
+		$discriminatorColumn = $context->classMetadata?->discriminatorColumn;
+		if ($databaseSchema === null || $context->classMetadata === null || $discriminatorColumn === null) {
+			return;
+		}
+
+		$fieldMapping = FieldMapping::fromMappingArray([
+			'type' => $discriminatorColumn->type,
+			'fieldName' => $discriminatorColumn->fieldName,
+			'columnName' => $discriminatorColumn->name,
+			'length' => $discriminatorColumn->length,
+			'columnDefinition' => $discriminatorColumn->columnDefinition,
+			'options' => $discriminatorColumn->options,
+			'nullable' => false,
+		]);
+		$expectations = array_filter(
+			$this->checkDatabaseColumnInTable(
+				$context,
+				$databaseSchema,
+				$context->classMetadata->getTableName(),
+				$fieldMapping,
+				false,
+				'DiscriminatorColumn',
+			),
+			static fn (DatabaseExpectation $expectation): bool => $expectation->option
+				|| in_array($expectation->name, ['length', 'columnDefinition'], true),
+		);
+
+		$this->applyDatabaseExpectations($context, array_values($expectations));
 	}
 
 	/**
