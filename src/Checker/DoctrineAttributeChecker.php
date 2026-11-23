@@ -1928,6 +1928,10 @@ final class DoctrineAttributeChecker
 	 */
 	private function getDatabaseFieldTargets(ClassMetadata $classMetadata, string $propertyName): array
 	{
+		if ($classMetadata->isEmbeddedClass) {
+			return $this->getDatabaseEmbeddableFieldTargets($classMetadata->name, $propertyName);
+		}
+
 		if (!$classMetadata->isMappedSuperclass) {
 			$fieldMapping = $classMetadata->fieldMappings[$propertyName] ?? null;
 
@@ -1953,6 +1957,39 @@ final class DoctrineAttributeChecker
 				'fieldMapping' => $fieldMapping,
 				'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
 			];
+		}
+
+		ksort($targets);
+
+		return array_values($targets);
+	}
+
+	/**
+	 * Properties of an embeddable are compared with the columns of all entities that embed it.
+	 *
+	 * @param class-string $className
+	 * @return list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}>
+	 */
+	private function getDatabaseEmbeddableFieldTargets(string $className, string $propertyName): array
+	{
+		$targets = [];
+		foreach ($this->metadataByClassName as $entityMetadata) {
+			if ($entityMetadata->isMappedSuperclass || $entityMetadata->isEmbeddedClass) {
+				continue;
+			}
+
+			foreach ($entityMetadata->fieldMappings as $fieldMapping) {
+				if ($fieldMapping->originalClass !== $className || $fieldMapping->originalField !== $propertyName) {
+					continue;
+				}
+
+				$tableName = $entityMetadata->getTableName();
+				$targets[sprintf('%s.%s', $tableName, $fieldMapping->columnName)] = [
+					'table' => $tableName,
+					'fieldMapping' => $fieldMapping,
+					'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
+				];
+			}
 		}
 
 		ksort($targets);

@@ -49,6 +49,9 @@ abstract class FactoryMetadataTestCase extends TestCase
 		$metadataByClassName = [];
 		foreach ($entityManager->getMetadataFactory()->getAllMetadata() as $metadata) {
 			$metadataByClassName[$metadata->name] = $metadata;
+			foreach ($metadata->embeddedClasses as $embeddedClass) {
+				$metadataByClassName[$embeddedClass->class] = $entityManager->getClassMetadata($embeddedClass->class);
+			}
 		}
 
 		return $metadataByClassName;
