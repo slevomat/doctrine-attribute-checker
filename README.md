@@ -14,6 +14,8 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
 
 - Properties of a `MappedSuperclass` are compared with the columns of all entities that inherit them. When those columns
   differ (e.g. different lengths), a non-fixable violation lists the differing columns.
+- Columns of properties declared in a subclass of a single table inheritance hierarchy may be nullable in the database
+  even when the property is not, because rows of the other subclasses do not fill them.
 
 ## Installation
 

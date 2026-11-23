@@ -1906,7 +1906,13 @@ final class DoctrineAttributeChecker
 		foreach ($this->getDatabaseFieldTargets($context->classMetadata, $context->property->name) as $target) {
 			array_push(
 				$expectations,
-				...$this->checkDatabaseColumnInTable($context, $databaseSchema, $target['table'], $target['fieldMapping']),
+				...$this->checkDatabaseColumnInTable(
+					$context,
+					$databaseSchema,
+					$target['table'],
+					$target['fieldMapping'],
+					$target['singleTableSubclass'],
+				),
 			);
 		}
 
@@ -1918,7 +1924,7 @@ final class DoctrineAttributeChecker
 	 * Properties of a mapped superclass are compared with the tables of all entities that inherit them.
 	 *
 	 * @param EntityClassMetadata $classMetadata
-	 * @return list<array{table: string, fieldMapping: FieldMapping}>
+	 * @return list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}>
 	 */
 	private function getDatabaseFieldTargets(ClassMetadata $classMetadata, string $propertyName): array
 	{
@@ -1926,7 +1932,11 @@ final class DoctrineAttributeChecker
 			$fieldMapping = $classMetadata->fieldMappings[$propertyName] ?? null;
 
 			return $fieldMapping instanceof FieldMapping
-				? [['table' => $classMetadata->getTableName(), 'fieldMapping' => $fieldMapping]]
+				? [[
+					'table' => $classMetadata->getTableName(),
+					'fieldMapping' => $fieldMapping,
+					'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($classMetadata, $fieldMapping->inherited),
+				]]
 				: [];
 		}
 
@@ -1941,12 +1951,29 @@ final class DoctrineAttributeChecker
 			$targets[sprintf('%s.%s', $tableName, $fieldMapping->columnName)] = [
 				'table' => $tableName,
 				'fieldMapping' => $fieldMapping,
+				'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
 			];
 		}
 
 		ksort($targets);
 
 		return array_values($targets);
+	}
+
+	/**
+	 * Columns of properties declared in a subclass of a single table inheritance hierarchy are shared with
+	 * the other subclasses, so they may be nullable in the database even when the property is not.
+	 *
+	 * @param EntityClassMetadata $entityMetadata
+	 * @param ?class-string $inheritedFrom Entity class the mapping is inherited from.
+	 */
+	private function isDeclaredInSingleTableSubclass(ClassMetadata $entityMetadata, ?string $inheritedFrom): bool
+	{
+		if (!$entityMetadata->isInheritanceTypeSingleTable() || $entityMetadata->name === $entityMetadata->rootEntityName) {
+			return false;
+		}
+
+		return $inheritedFrom === null || $inheritedFrom !== $entityMetadata->rootEntityName;
 	}
 
 	/**
@@ -1979,6 +2006,7 @@ final class DoctrineAttributeChecker
 		DatabaseSchemaSnapshot $databaseSchema,
 		string $tableName,
 		FieldMapping $fieldMapping,
+		bool $singleTableSubclass,
 	): array
 	{
 		$columnName = $fieldMapping->columnName;
@@ -2005,7 +2033,14 @@ final class DoctrineAttributeChecker
 			);
 		}
 
-		if ($fieldMapping->nullable !== null && $databaseColumn->nullable !== $fieldMapping->nullable) {
+		if (
+			$fieldMapping->nullable !== null
+			&& $databaseColumn->nullable !== $fieldMapping->nullable
+			&& !(
+				$singleTableSubclass
+				&& $databaseColumn->nullable
+			)
+		) {
 			$this->addViolation(
 				$context,
 				'database.column-nullability',
@@ -2294,6 +2329,7 @@ final class DoctrineAttributeChecker
 				$target['oneToOne'],
 				$target['joinColumn'],
 				$target['association'],
+				$target['singleTableSubclass'],
 			);
 			if ($expectation === null) {
 				continue;
@@ -2311,7 +2347,8 @@ final class DoctrineAttributeChecker
 	 *     referencedTable: string,
 	 *     oneToOne: bool,
 	 *     joinColumn: JoinColumnMapping,
-	 *     association: ?ToOneOwningSideMapping
+	 *     association: ?ToOneOwningSideMapping,
+	 *     singleTableSubclass: bool
 	 * }>
 	 */
 	private function getDatabaseJoinColumnTargets(DoctrineAttributeContext $context): array
@@ -2336,6 +2373,12 @@ final class DoctrineAttributeChecker
 				'oneToOne' => $context->databaseOneToOne,
 				'joinColumn' => $context->databaseJoinColumn,
 				'association' => null,
+				'singleTableSubclass' => !$context->databaseJoinTable && $this->isDeclaredInSingleTableSubclass(
+					$classMetadata,
+					$context->property === null
+						? null
+						: ($classMetadata->associationMappings[$context->property->name] ?? null)?->inherited,
+				),
 			]];
 		}
 
@@ -2372,6 +2415,7 @@ final class DoctrineAttributeChecker
 				'oneToOne' => $associationMapping instanceof OneToOneOwningSideMapping,
 				'joinColumn' => $joinColumnMapping,
 				'association' => $associationMapping,
+				'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $associationMapping->inherited),
 			];
 		}
 
@@ -2388,6 +2432,7 @@ final class DoctrineAttributeChecker
 		bool $isOneToOne,
 		JoinColumnMapping $joinColumnMapping,
 		?ToOneOwningSideMapping $associationMapping,
+		bool $singleTableSubclass,
 	): ?DatabaseExpectation
 	{
 		$columnName = $context->arguments['name'] ?? $joinColumnMapping->name;
@@ -2419,7 +2464,7 @@ final class DoctrineAttributeChecker
 		}
 
 		$expectedNullable = $joinColumnMapping->nullable ?? true;
-		if ($databaseColumn->nullable !== $expectedNullable) {
+		if ($databaseColumn->nullable !== $expectedNullable && !($singleTableSubclass && $databaseColumn->nullable)) {
 			$this->addViolation(
 				$context,
 				'database.join-column-nullability',

@@ -2,15 +2,10 @@
 
 namespace Slevomat\DoctrineAttributeChecker\Checker;
 
-use Nette\Utils\FileSystem;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\Inheritance\InheritanceBaseEntity;
-use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseColumn;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
-use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
 use Slevomat\DoctrineAttributeChecker\Violation;
-use function array_map;
-use function sprintf;
 use function substr_count;
 
 final class MappedSuperclassTest extends FactoryMetadataTestCase
@@ -83,17 +78,7 @@ final class MappedSuperclassTest extends FactoryMetadataTestCase
 	 */
 	private function inspect(DatabaseSchemaSnapshot $schema, bool $fix): array
 	{
-		$entityManager = $this->createEntityManager(__DIR__ . '/data/Inheritance');
-		$checker = new DoctrineAttributeChecker(
-			$entityManager,
-			(new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile()),
-			new AttributeSourceEditor(),
-			$this->loadAll($entityManager),
-			[InheritanceBaseEntity::class => true],
-			$schema,
-		);
-
-		return $checker->inspect(FileSystem::read(self::FILE), self::FILE, $fix);
+		return $this->inspectFixture(__DIR__ . '/data/Inheritance', self::FILE, InheritanceBaseEntity::class, $schema, $fix);
 	}
 
 	/**
@@ -110,23 +95,6 @@ final class MappedSuperclassTest extends FactoryMetadataTestCase
 		];
 
 		return $this->createSchema($overrides + $columns);
-	}
-
-	private static function charColumn(int $length, bool $nullable): DatabaseColumn
-	{
-		return new DatabaseColumn('char', sprintf('char(%d)', $length), $length, null, null, $nullable, 'utf8mb4_general_ci');
-	}
-
-	/**
-	 * @param list<Violation> $violations
-	 * @return list<string>
-	 */
-	private function formatViolations(array $violations): array
-	{
-		return array_map(
-			static fn (Violation $violation): string => sprintf('%s: %s', $violation->rule, $violation->message),
-			$violations,
-		);
 	}
 
 }
