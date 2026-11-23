@@ -10,6 +10,11 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
   join columns, foreign keys and unique indexes with the database.
 - Supports a baseline of known violations, similar to PHPStan.
 
+### Inheritance and embeddables
+
+- Properties of a `MappedSuperclass` are compared with the columns of all entities that inherit them. When those columns
+  differ (e.g. different lengths), a non-fixable violation lists the differing columns.
+
 ## Installation
 
 ```bash
