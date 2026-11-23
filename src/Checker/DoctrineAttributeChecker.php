@@ -1349,6 +1349,17 @@ final class DoctrineAttributeChecker
 			return;
 		}
 
+		if (strtoupper($strategy) === 'NONE') {
+			$this->fixViolation(
+				$context,
+				'generated-value.strategy',
+				'GeneratedValue with the NONE strategy is redundant; identifiers without GeneratedValue are not generated.',
+				static fn (): bool => $context->removeFromSource(),
+			);
+
+			return;
+		}
+
 		if (strtoupper($strategy) === 'AUTO') {
 			$this->fixViolation(
 				$context,

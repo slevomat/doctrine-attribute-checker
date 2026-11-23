@@ -1502,6 +1502,14 @@ class DoctrineAttributeCheckerTest extends TestCase
 				null,
 				['generated-value.strategy'],
 			],
+			'generated value none strategy is redundant' => [
+				FixtureBasicEntity::class,
+				'body',
+				"\t#[ORM\\Id]\n\t#[ORM\\GeneratedValue]\n",
+				"\t#[ORM\\Id]\n\t#[ORM\\GeneratedValue(strategy: 'NONE')]\n",
+				"\t#[ORM\\Id]\n",
+				['generated-value.strategy'],
+			],
 			'embedded class inferred' => [
 				FixtureBasicEntity::class,
 				'body',
