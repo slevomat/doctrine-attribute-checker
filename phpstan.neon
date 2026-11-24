@@ -13,6 +13,7 @@ parameters:
 		- tests/Checker/data/DoctrineAttributeCheckerEntities.php
 		- tests/Checker/data/Inheritance/InheritanceEntities.php
 		- tests/Checker/data/Embeddable/EmbeddableEntities.php
+		- tests/Checker/data/NullableEmbedded/NullableEmbeddedEntities.php
 	excludePaths:
 		- tests/*/data/*
 	checkMissingOverrideMethodAttribute: true
