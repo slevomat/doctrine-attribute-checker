@@ -20,6 +20,8 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
   compared with the columns of all entities that embed them (with any column prefix). A nullable property may map
   a `NOT NULL` column when the column of another embedding entity is nullable, because the embeddable is shared and
   the stricter column only adds a database constraint.
+- Columns of an embeddable embedded by a nullable property (directly or through a nullable outer embeddable) may be
+  nullable in the database even when the embeddable property is not, because they are `NULL` when the property is null.
 - `InheritanceType`, `DiscriminatorColumn` and `DiscriminatorMap` are forbidden by default; remove them from
   `attributes.forbidden` to use inheritance. `DiscriminatorColumn` is then compared with the database column like
   `Column` (existence, type, nullability, length, fixed and collation).

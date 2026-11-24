@@ -40,6 +40,7 @@ use function array_unique;
 use function array_values;
 use function class_exists;
 use function count;
+use function explode;
 use function implode;
 use function in_array;
 use function is_array;
@@ -47,6 +48,7 @@ use function is_string;
 use function is_subclass_of;
 use function ksort;
 use function ltrim;
+use function property_exists;
 use function serialize;
 use function sprintf;
 use function str_contains;
@@ -1932,7 +1934,7 @@ final class DoctrineAttributeChecker
 					$databaseSchema,
 					$target['table'],
 					$target['fieldMapping'],
-					$target['singleTableSubclass'],
+					$target['nullableColumnAllowed'],
 					nullableInEmbeddingTable: $nullableInEmbeddingTable,
 				),
 			);
@@ -1946,7 +1948,7 @@ final class DoctrineAttributeChecker
 	 * Properties of a mapped superclass are compared with the tables of all entities that inherit them.
 	 *
 	 * @param EntityClassMetadata $classMetadata
-	 * @return list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}>
+	 * @return list<array{table: string, fieldMapping: FieldMapping, nullableColumnAllowed: bool}>
 	 */
 	private function getDatabaseFieldTargets(ClassMetadata $classMetadata, string $propertyName): array
 	{
@@ -1961,7 +1963,7 @@ final class DoctrineAttributeChecker
 				? [[
 					'table' => $classMetadata->getTableName(),
 					'fieldMapping' => $fieldMapping,
-					'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($classMetadata, $fieldMapping->inherited),
+					'nullableColumnAllowed' => $this->isDeclaredInSingleTableSubclass($classMetadata, $fieldMapping->inherited),
 				]]
 				: [];
 		}
@@ -1977,7 +1979,7 @@ final class DoctrineAttributeChecker
 			$targets[sprintf('%s.%s', $tableName, $fieldMapping->columnName)] = [
 				'table' => $tableName,
 				'fieldMapping' => $fieldMapping,
-				'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
+				'nullableColumnAllowed' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
 			];
 		}
 
@@ -1987,7 +1989,7 @@ final class DoctrineAttributeChecker
 	}
 
 	/**
-	 * @param list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}> $targets
+	 * @param list<array{table: string, fieldMapping: FieldMapping, nullableColumnAllowed: bool}> $targets
 	 */
 	private function hasNullableDatabaseColumn(DatabaseSchemaSnapshot $databaseSchema, array $targets): bool
 	{
@@ -2004,7 +2006,7 @@ final class DoctrineAttributeChecker
 	 * Properties of an embeddable are compared with the columns of all entities that embed it.
 	 *
 	 * @param class-string $className
-	 * @return list<array{table: string, fieldMapping: FieldMapping, singleTableSubclass: bool}>
+	 * @return list<array{table: string, fieldMapping: FieldMapping, nullableColumnAllowed: bool}>
 	 */
 	private function getDatabaseEmbeddableFieldTargets(string $className, string $propertyName): array
 	{
@@ -2023,7 +2025,8 @@ final class DoctrineAttributeChecker
 				$targets[sprintf('%s.%s', $tableName, $fieldMapping->columnName)] = [
 					'table' => $tableName,
 					'fieldMapping' => $fieldMapping,
-					'singleTableSubclass' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited),
+					'nullableColumnAllowed' => $this->isDeclaredInSingleTableSubclass($entityMetadata, $fieldMapping->inherited)
+						|| $this->isEmbeddedInNullableProperty($entityMetadata, $fieldMapping),
 				];
 			}
 		}
@@ -2031,6 +2034,40 @@ final class DoctrineAttributeChecker
 		ksort($targets);
 
 		return array_values($targets);
+	}
+
+	/**
+	 * Columns of an embeddable embedded by a nullable property (directly or through a nullable outer embeddable)
+	 * are NULL when the property is null, so they may be nullable in the database even when the embeddable
+	 * property is not.
+	 *
+	 * @param EntityClassMetadata $entityMetadata
+	 */
+	private function isEmbeddedInNullableProperty(ClassMetadata $entityMetadata, FieldMapping $fieldMapping): bool
+	{
+		if ($fieldMapping->declaredField === null) {
+			return false;
+		}
+
+		$className = $entityMetadata->name;
+		foreach (explode('.', $fieldMapping->declaredField) as $propertyName) {
+			if (!class_exists($className) || !property_exists($className, $propertyName)) {
+				return false;
+			}
+
+			$propertyType = (new ReflectionProperty($className, $propertyName))->getType();
+			if ($propertyType === null || $propertyType->allowsNull()) {
+				return true;
+			}
+
+			if (!$propertyType instanceof ReflectionNamedType || $propertyType->isBuiltin()) {
+				return false;
+			}
+
+			$className = $propertyType->getName();
+		}
+
+		return false;
 	}
 
 	/**
@@ -2079,7 +2116,7 @@ final class DoctrineAttributeChecker
 		DatabaseSchemaSnapshot $databaseSchema,
 		string $tableName,
 		FieldMapping $fieldMapping,
-		bool $singleTableSubclass,
+		bool $nullableColumnAllowed,
 		string $attributeName = 'Column',
 		bool $nullableInEmbeddingTable = false,
 	): array
@@ -2112,7 +2149,7 @@ final class DoctrineAttributeChecker
 			$fieldMapping->nullable !== null
 			&& $databaseColumn->nullable !== $fieldMapping->nullable
 			&& !(
-				$singleTableSubclass
+				$nullableColumnAllowed
 				&& $databaseColumn->nullable
 			)
 			&& !(
