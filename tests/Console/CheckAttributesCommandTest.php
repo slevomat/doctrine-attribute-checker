@@ -9,6 +9,7 @@ use Nette\Neon\Neon;
 use Nette\Utils\FileSystem;
 use Override;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureBasicEntity;
 use Slevomat\DoctrineAttributeChecker\Checker\FixtureMetadata;
 use Slevomat\DoctrineAttributeChecker\CheckerException;
@@ -160,6 +161,55 @@ class CheckAttributesCommandTest extends TestCase
 		self::assertStringContainsString('[ERROR] Found 1 unmatched Doctrine attribute baseline entry.', $tester->getDisplay());
 	}
 
+	public function testUnmatchedBaselineEntryOfInspectedFileIsReported(): void
+	{
+		$configurationFile = $this->writeConfiguration(sprintf(
+			<<<'NEON'
+				rootDirectory: %s
+				ignoreErrors:
+					-
+						rule: table.name
+						target: Slevomat\DoctrineAttributeChecker\Checker\Data\FixtureBasicEntity
+						path: tests/Checker/data/DoctrineAttributeCheckerEntities.php
+						message: Table.name must be specified explicitly.
+				NEON,
+			dirname(__DIR__, 2),
+		));
+		$tester = $this->createTester();
+
+		$status = $tester->execute([
+			'--configuration' => $configurationFile,
+			'files' => [$this->getFixtureEntityFile()],
+		]);
+
+		self::assertSame(Command::FAILURE, $status);
+		self::assertStringContainsString('[ERROR] Found 1 unmatched Doctrine attribute baseline entry.', $tester->getDisplay());
+	}
+
+	public function testUnmatchedBaselineEntryOfNotInspectedFileIsIgnored(): void
+	{
+		$configurationFile = $this->writeConfiguration(sprintf(
+			<<<'NEON'
+				rootDirectory: %s
+				ignoreErrors:
+					-
+						rule: table.name
+						target: App\Missing
+						path: app/Missing.php
+						message: Table.name must be specified explicitly.
+				NEON,
+			dirname(__DIR__, 2),
+		));
+		$tester = $this->createTester();
+
+		$status = $tester->execute([
+			'--configuration' => $configurationFile,
+			'files' => [$this->getFixtureEntityFile()],
+		]);
+
+		self::assertSame(Command::SUCCESS, $status, $tester->getDisplay());
+	}
+
 	public function testUnmatchedDatabaseBaselineEntryIsIgnoredWithoutDatabase(): void
 	{
 		$configurationFile = $this->writeConfiguration(<<<'NEON'
@@ -231,6 +281,14 @@ class CheckAttributesCommandTest extends TestCase
 		$this->expectExceptionMessage('Option entityManagerLoader must be configured');
 
 		(new CommandTester(new CheckAttributesCommand()))->execute(['--configuration' => $configurationFile]);
+	}
+
+	private function getFixtureEntityFile(): string
+	{
+		$file = (new ReflectionClass(FixtureBasicEntity::class))->getFileName();
+		self::assertNotFalse($file);
+
+		return $file;
 	}
 
 	private function createTester(): CommandTester

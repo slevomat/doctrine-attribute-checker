@@ -76,8 +76,9 @@ vendor/bin/doctrine-attribute-checker --configuration=path/to/config.neon
 Run it with `--db` if the baseline should contain database rules. It cannot be combined with `--fix`
 or file arguments.
 
-Baseline entries that no longer match any violation are reported on full runs; entries of `database.*` rules
-are checked only with `--db`.
+Baseline entries that no longer match any violation are reported as errors. With file arguments, only entries
+whose `path` belongs to one of the inspected files are checked. Entries of `database.*` rules are checked only
+with `--db`.
 
 ## Configuration
 
