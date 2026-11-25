@@ -144,12 +144,17 @@ final class CheckAttributesCommand extends Command
 
 		$baseline = new Baseline($config->rootDirectory, $config->ignoreErrors);
 		$violations = $baseline->filter($violations);
-		$unmatchedBaselineEntries = $files === []
-			? array_values(array_filter(
-				$baseline->getUnmatchedEntries(),
-				static fn (array $entry): bool => $db || !Rules::isDatabaseRule($entry['rule']),
-			))
-			: [];
+		// With file arguments, only entries of the inspected files can be recognized as unmatched.
+		$inspectedBaselinePaths = [];
+		foreach ($selectedFiles as $file) {
+			$inspectedBaselinePaths[RelativePath::fromRoot($config->rootDirectory, $file)] = true;
+		}
+
+		$unmatchedBaselineEntries = array_values(array_filter(
+			$baseline->getUnmatchedEntries(),
+			static fn (array $entry): bool => ($db || !Rules::isDatabaseRule($entry['rule']))
+				&& ($files === [] || isset($inspectedBaselinePaths[$entry['path']])),
+		));
 
 		usort(
 			$violations,
