@@ -1,5 +1,7 @@
 <?php declare(strict_types = 1);
 
+// spell-check-ignore: manytomany onetomany
+
 namespace Slevomat\DoctrineAttributeChecker\Rule\Mapping;
 
 use Override;

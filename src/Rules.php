@@ -2,7 +2,7 @@
 
 namespace Slevomat\DoctrineAttributeChecker;
 
-use Slevomat\DoctrineAttributeChecker\Checker\DoctrineAttributeChecker;
+use Slevomat\DoctrineAttributeChecker\Checker\JoinTableNormalizer;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Rule\RuleSetFactory;
 use function array_push;
@@ -26,7 +26,7 @@ final class Rules
 	 */
 	public static function getAll(Configuration $configuration): array
 	{
-		$rules = DoctrineAttributeChecker::RULE_IDENTIFIERS;
+		$rules = JoinTableNormalizer::RULE_IDENTIFIERS;
 		foreach (RuleSetFactory::RULE_CLASSES as $ruleClass) {
 			array_push($rules, ...$ruleClass::getIdentifiers($configuration));
 		}
