@@ -55,18 +55,13 @@ final class DatabaseColumnComparator
 	{
 	}
 
-	/**
-	 * @return list<DatabaseExpectation>
-	 */
-	public function compare(
+	public function checkCompatibility(
 		DoctrineAttributeContext $context,
 		ViolationReporter $reporter,
 		string $tableName,
 		FieldMapping $fieldMapping,
-		bool $nullableColumnAllowed,
-		string $attributeName = 'Column',
 		bool $nullableInEmbeddingTable = false,
-	): array
+	): void
 	{
 		$databaseSchema = $this->databaseSchema;
 		$columnName = $fieldMapping->columnName;
@@ -78,7 +73,7 @@ final class DatabaseColumnComparator
 				sprintf('Column %s.%s does not exist in database %s.', $tableName, $columnName, $databaseSchema->getSchema()),
 			);
 
-			return [];
+			return;
 		}
 
 		if (!DbalTypeCompatibility::isCompatible($fieldMapping, $databaseColumn, $this->mapping->getConnection())) {
@@ -93,12 +88,34 @@ final class DatabaseColumnComparator
 			);
 		}
 
-		if ($fieldMapping->nullable === true && !$databaseColumn->nullable && !$nullableInEmbeddingTable) {
-			$reporter->addViolation(
-				$context,
-				'database.column-rejects-null',
-				'PHP/Doctrine nullability is nullable but the database column is not nullable.',
-			);
+		if ($fieldMapping->nullable !== true || $databaseColumn->nullable || $nullableInEmbeddingTable) {
+			return;
+		}
+
+		$reporter->addViolation(
+			$context,
+			'database.column-rejects-null',
+			'PHP/Doctrine nullability is nullable but the database column is not nullable.',
+		);
+	}
+
+	/**
+	 * @return list<DatabaseExpectation>
+	 */
+	public function getExpectations(
+		DoctrineAttributeContext $context,
+		ViolationReporter $reporter,
+		string $tableName,
+		FieldMapping $fieldMapping,
+		bool $nullableColumnAllowed,
+		string $attributeName = 'Column',
+	): array
+	{
+		$databaseSchema = $this->databaseSchema;
+		$columnName = $fieldMapping->columnName;
+		$databaseColumn = $databaseSchema->getColumn($tableName, $columnName);
+		if ($databaseColumn === null) {
+			return [];
 		}
 
 		if ($fieldMapping->nullable === false && $databaseColumn->nullable && !$nullableColumnAllowed) {

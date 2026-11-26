@@ -2,44 +2,49 @@
 
 namespace Slevomat\DoctrineAttributeChecker\Rule\Database;
 
+use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\FieldMapping;
 use Override;
 use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseColumnComparator;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseExpectation;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseExpectationApplier;
 use Slevomat\DoctrineAttributeChecker\Checker\DoctrineAttributeContext;
 use Slevomat\DoctrineAttributeChecker\Checker\ViolationReporter;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Rule\AttributeRule;
-use function array_filter;
-use function array_values;
-use function in_array;
 
 final class DatabaseDiscriminatorColumnRule implements AttributeRule
 {
 
 	public function __construct(
 		private DatabaseColumnComparator $comparator,
-		private DatabaseExpectationApplier $expectationApplier,
 	)
 	{
+	}
+
+	/**
+	 * @param ClassMetadata<object> $classMetadata
+	 */
+	public static function createFieldMapping(ClassMetadata $classMetadata): ?FieldMapping
+	{
+		$discriminatorColumn = $classMetadata->discriminatorColumn;
+		if ($discriminatorColumn === null) {
+			return null;
+		}
+
+		return FieldMapping::fromMappingArray([
+			'type' => $discriminatorColumn->type,
+			'fieldName' => $discriminatorColumn->fieldName,
+			'columnName' => $discriminatorColumn->name,
+			'length' => $discriminatorColumn->length,
+			'columnDefinition' => $discriminatorColumn->columnDefinition,
+			'options' => $discriminatorColumn->options,
+			'nullable' => false,
+		]);
 	}
 
 	#[Override]
 	public static function getIdentifiers(Configuration $configuration): array
 	{
-		return [
-			'database.column-allows-null',
-			'database.column-collation',
-			'database.column-definition',
-			'database.column-fixed',
-			'database.column-length',
-			'database.column-missing',
-			'database.column-precision',
-			'database.column-rejects-null',
-			'database.column-type',
-			'database.column-unsigned',
-		];
+		return ['database.column-missing', 'database.column-type'];
 	}
 
 	#[Override]
@@ -51,34 +56,16 @@ final class DatabaseDiscriminatorColumnRule implements AttributeRule
 	#[Override]
 	public function process(DoctrineAttributeContext $context, ViolationReporter $reporter): void
 	{
-		$discriminatorColumn = $context->classMetadata?->discriminatorColumn;
-		if ($context->classMetadata === null || $discriminatorColumn === null) {
+		if ($context->classMetadata === null) {
 			return;
 		}
 
-		$fieldMapping = FieldMapping::fromMappingArray([
-			'type' => $discriminatorColumn->type,
-			'fieldName' => $discriminatorColumn->fieldName,
-			'columnName' => $discriminatorColumn->name,
-			'length' => $discriminatorColumn->length,
-			'columnDefinition' => $discriminatorColumn->columnDefinition,
-			'options' => $discriminatorColumn->options,
-			'nullable' => false,
-		]);
-		$expectations = array_filter(
-			$this->comparator->compare(
-				$context,
-				$reporter,
-				$context->classMetadata->getTableName(),
-				$fieldMapping,
-				false,
-				'DiscriminatorColumn',
-			),
-			static fn (DatabaseExpectation $expectation): bool => $expectation->option
-				|| in_array($expectation->name, ['length', 'columnDefinition'], true),
-		);
+		$fieldMapping = self::createFieldMapping($context->classMetadata);
+		if ($fieldMapping === null) {
+			return;
+		}
 
-		$this->expectationApplier->apply($context, $reporter, array_values($expectations));
+		$this->comparator->checkCompatibility($context, $reporter, $context->classMetadata->getTableName(), $fieldMapping);
 	}
 
 }

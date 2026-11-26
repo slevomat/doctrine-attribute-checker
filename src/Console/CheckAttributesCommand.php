@@ -31,6 +31,7 @@ use function array_values;
 use function count;
 use function explode;
 use function getcwd;
+use function in_array;
 use function realpath;
 use function sprintf;
 use function str_starts_with;
@@ -70,8 +71,10 @@ final class CheckAttributesCommand extends Command
 		array $files = [],
 		#[Option(description: 'Apply automatic fixes to the inspected files.')]
 		bool $fix = false,
-		#[Option(description: 'Compare schema-related attributes with the database.')]
+		#[Option(description: 'Compare the mapping with the database and report differences that break the application.')]
 		bool $db = false,
+		#[Option(description: 'With --db, keep the mapping exactly in sync with the database (lengths, options, indexes, nullability).')]
+		bool $strict = false,
 		#[Option(description: 'Configuration file (default: doctrine-attributes.neon in the current directory).')]
 		?string $configuration = null,
 		#[Option(description: 'Write all current violations to the baseline file (default: the configured baseline).')]
@@ -81,6 +84,12 @@ final class CheckAttributesCommand extends Command
 		$config = $this->configurationLoader->load($configuration);
 		$environment = $this->createEnvironment($config);
 		$entityManager = $environment->entityManager;
+
+		if ($strict && !$db) {
+			$output->writeln('<error>--strict can be used only with --db.</error>');
+
+			return self::INVALID;
+		}
 
 		if ($generateBaseline !== false && ($fix || $files !== [])) {
 			$output->writeln('<error>--generate-baseline cannot be combined with --fix or with file arguments.</error>');
@@ -116,6 +125,7 @@ final class CheckAttributesCommand extends Command
 			$metadataByClassName,
 			$mappedClassNames,
 			$db ? $this->loadDatabaseSchema($environment) : null,
+			$strict,
 		);
 		$violations = [];
 		$changedFiles = [];
@@ -150,9 +160,12 @@ final class CheckAttributesCommand extends Command
 			$inspectedBaselinePaths[RelativePath::fromRoot($config->rootDirectory, $file)] = true;
 		}
 
+		// Entries of rules that were not checked cannot be recognized as unmatched.
+		$strictRules = $strict ? [] : Rules::getStrict($config);
 		$unmatchedBaselineEntries = array_values(array_filter(
 			$baseline->getUnmatchedEntries(),
 			static fn (array $entry): bool => ($db || !Rules::isDatabaseRule($entry['rule']))
+				&& !in_array($entry['rule'], $strictRules, true)
 				&& ($files === [] || isset($inspectedBaselinePaths[$entry['path']])),
 		));
 

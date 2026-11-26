@@ -139,6 +139,7 @@ abstract class FactoryMetadataTestCase extends TestCase
 		DatabaseSchemaSnapshot $schema,
 		bool $fix,
 		?string $configuration = null,
+		bool $strict = true,
 	): array
 	{
 		$entityManager = $this->createEntityManager($directory);
@@ -149,6 +150,7 @@ abstract class FactoryMetadataTestCase extends TestCase
 			$this->loadAll($entityManager),
 			[$className => true],
 			$schema,
+			$strict,
 		);
 
 		return $checker->inspect(FileSystem::read($file), $file, $fix);

@@ -12,9 +12,12 @@ use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNarrowerRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnStrictRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnStrictRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseIdentityColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseJoinColumnRule;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseJoinColumnStrictRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseTableRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Mapping\CacheRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Mapping\CascadeOrderRule;
@@ -36,8 +39,6 @@ use Slevomat\DoctrineAttributeChecker\Rule\Mapping\TableRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Mapping\ToManyAssociationRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Mapping\ToOneAssociationRule;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
-use function array_filter;
-use function array_values;
 
 final class RuleSetFactory
 {
@@ -52,11 +53,13 @@ final class RuleSetFactory
 		ColumnTypeRule::class,
 		ColumnArgumentsRule::class,
 		DatabaseColumnRule::class,
+		DatabaseColumnStrictRule::class,
 		DatabaseColumnNarrowerRule::class,
 		ColumnOrderRule::class,
 		ColumnEmptyParenthesesRule::class,
 		JoinColumnRule::class,
 		DatabaseJoinColumnRule::class,
+		DatabaseJoinColumnStrictRule::class,
 		JoinColumnEmptyRule::class,
 		TableRule::class,
 		JoinTableRule::class,
@@ -65,6 +68,7 @@ final class RuleSetFactory
 		ToManyAssociationRule::class,
 		EmbeddedRule::class,
 		DatabaseDiscriminatorColumnRule::class,
+		DatabaseDiscriminatorColumnStrictRule::class,
 		DatabaseTableRule::class,
 		DatabaseColumnNotInsertedRule::class,
 		DatabaseIdentityColumnRule::class,
@@ -77,62 +81,71 @@ final class RuleSetFactory
 		Identifiers $identifiers,
 		AttributeSourceEditor $sourceEditor,
 		?DatabaseSchemaSnapshot $databaseSchema,
+		bool $strict = false,
 	): RuleSet
 	{
-		$databaseColumnRule = null;
-		$databaseColumnNarrowerRule = null;
-		$databaseJoinColumnRule = null;
-		$databaseDiscriminatorColumnRule = null;
-		$databaseTableRule = null;
-		$databaseColumnNotInsertedRule = null;
-		$databaseIdentityColumnRule = null;
+		$columnDatabaseRules = [];
+		$joinColumnDatabaseRules = [];
+		$discriminatorColumnDatabaseRules = [];
+		$classDatabaseRules = [];
 		if ($databaseSchema !== null) {
 			$targetResolver = new DatabaseTargetResolver($mapping);
 			$comparator = new DatabaseColumnComparator($mapping, $databaseSchema);
 			$expectationApplier = new DatabaseExpectationApplier();
-			$databaseColumnRule = new DatabaseColumnRule($databaseSchema, $targetResolver, $comparator, $expectationApplier);
-			$databaseColumnNarrowerRule = new DatabaseColumnNarrowerRule($databaseSchema, $targetResolver);
-			$databaseJoinColumnRule = new DatabaseJoinColumnRule($databaseSchema, $targetResolver, $expectationApplier);
-			$databaseDiscriminatorColumnRule = new DatabaseDiscriminatorColumnRule($comparator, $expectationApplier);
-			$databaseTableRule = new DatabaseTableRule($databaseSchema);
-			$databaseColumnNotInsertedRule = new DatabaseColumnNotInsertedRule($databaseSchema);
-			$databaseIdentityColumnRule = new DatabaseIdentityColumnRule($databaseSchema);
-		}
 
-		$attributeRules = [
-			new LifecycleCallbackRule($configuration),
-			new EntityRule($configuration, $mapping),
-			new CacheRule($configuration),
-			new GeneratedValueRule(),
-			new ColumnNameRule($mapping, $identifiers),
-			new ColumnTypeRule($mapping),
-			new ColumnArgumentsRule($configuration),
-			$databaseColumnRule,
-			$databaseColumnNarrowerRule,
-			new ColumnOrderRule($configuration),
-			new ColumnEmptyParenthesesRule($sourceEditor),
-			new JoinColumnRule($mapping, $identifiers),
-			$databaseJoinColumnRule,
-			new JoinColumnEmptyRule(),
-			new TableRule($configuration, $identifiers),
-			new JoinTableRule($identifiers),
-			new CascadeOrderRule($configuration),
-			new ToOneAssociationRule(),
-			new ToManyAssociationRule(),
-			new EmbeddedRule(),
-			$databaseDiscriminatorColumnRule,
-		];
-		$classRules = [
-			$databaseTableRule,
-			$databaseColumnNotInsertedRule,
-			$databaseIdentityColumnRule,
-			new TableAttributeMissingRule($sourceEditor, $identifiers),
-		];
+			$columnDatabaseRules[] = new DatabaseColumnRule($databaseSchema, $targetResolver, $comparator);
+			$joinColumnDatabaseRules[] = new DatabaseJoinColumnRule($databaseSchema, $targetResolver);
+			$discriminatorColumnDatabaseRules[] = new DatabaseDiscriminatorColumnRule($comparator);
+			if ($strict) {
+				$columnDatabaseRules[] = new DatabaseColumnStrictRule($targetResolver, $comparator, $expectationApplier);
+				$joinColumnDatabaseRules[] = new DatabaseJoinColumnStrictRule(
+					$databaseSchema,
+					$targetResolver,
+					$expectationApplier,
+				);
+				$discriminatorColumnDatabaseRules[] = new DatabaseDiscriminatorColumnStrictRule(
+					$comparator,
+					$expectationApplier,
+				);
+			}
+
+			// Registered after the strict rule, so that it sees the length synchronized by a fix.
+			$columnDatabaseRules[] = new DatabaseColumnNarrowerRule($databaseSchema, $targetResolver);
+			$classDatabaseRules = [
+				new DatabaseTableRule($databaseSchema),
+				new DatabaseColumnNotInsertedRule($databaseSchema),
+				new DatabaseIdentityColumnRule($databaseSchema),
+			];
+		}
 
 		return new RuleSet(
 			new ForbiddenAttributeRule($configuration),
-			array_values(array_filter($attributeRules, static fn (?AttributeRule $rule): bool => $rule !== null)),
-			array_values(array_filter($classRules, static fn (?ClassRule $rule): bool => $rule !== null)),
+			[
+				new LifecycleCallbackRule($configuration),
+				new EntityRule($configuration, $mapping),
+				new CacheRule($configuration),
+				new GeneratedValueRule(),
+				new ColumnNameRule($mapping, $identifiers),
+				new ColumnTypeRule($mapping),
+				new ColumnArgumentsRule($configuration),
+				...$columnDatabaseRules,
+				new ColumnOrderRule($configuration),
+				new ColumnEmptyParenthesesRule($sourceEditor),
+				new JoinColumnRule($mapping, $identifiers),
+				...$joinColumnDatabaseRules,
+				new JoinColumnEmptyRule(),
+				new TableRule($configuration, $identifiers),
+				new JoinTableRule($identifiers),
+				new CascadeOrderRule($configuration),
+				new ToOneAssociationRule(),
+				new ToManyAssociationRule(),
+				new EmbeddedRule(),
+				...$discriminatorColumnDatabaseRules,
+			],
+			[
+				...$classDatabaseRules,
+				new TableAttributeMissingRule($sourceEditor, $identifiers),
+			],
 		);
 	}
 

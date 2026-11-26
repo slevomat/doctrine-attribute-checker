@@ -6,51 +6,65 @@ use Slevomat\DoctrineAttributeChecker\Checker\DoctrineMapping;
 use Slevomat\DoctrineAttributeChecker\Checker\FactoryMetadataTestCase;
 use Slevomat\DoctrineAttributeChecker\Checker\Identifiers;
 use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNarrowerRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseIdentityColumnRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseJoinColumnRule;
-use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseTableRule;
+use Slevomat\DoctrineAttributeChecker\Rules;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
-use function array_diff;
+use function array_filter;
 use function array_map;
 use function array_values;
+use function is_subclass_of;
 use function sort;
+use function str_starts_with;
 
 final class RuleSetFactoryTest extends FactoryMetadataTestCase
 {
 
-	public function testDatabaseRuleSetContainsAllRuleClasses(): void
+	public function testStrictDatabaseRuleSetContainsAllRuleClasses(): void
 	{
-		$ruleClasses = $this->getCreatedRuleClasses(true);
-		$expectedRuleClasses = RuleSetFactory::RULE_CLASSES;
-		sort($expectedRuleClasses);
+		self::assertSame($this->getExpectedRuleClasses(true, true), $this->getCreatedRuleClasses(true, true));
+	}
 
-		self::assertSame($expectedRuleClasses, $ruleClasses);
+	public function testDatabaseRuleSetContainsNoStrictRules(): void
+	{
+		self::assertSame($this->getExpectedRuleClasses(true, false), $this->getCreatedRuleClasses(true, false));
 	}
 
 	public function testRuleSetWithoutDatabaseContainsNoDatabaseRules(): void
 	{
-		$expectedRuleClasses = array_values(array_diff(RuleSetFactory::RULE_CLASSES, [
-			DatabaseColumnNarrowerRule::class,
-			DatabaseColumnNotInsertedRule::class,
-			DatabaseColumnRule::class,
-			DatabaseDiscriminatorColumnRule::class,
-			DatabaseIdentityColumnRule::class,
-			DatabaseJoinColumnRule::class,
-			DatabaseTableRule::class,
-		]));
-		sort($expectedRuleClasses);
+		self::assertSame($this->getExpectedRuleClasses(false, true), $this->getCreatedRuleClasses(false, true));
+	}
 
-		self::assertSame($expectedRuleClasses, $this->getCreatedRuleClasses(false));
+	public function testStrictRulesReportOnlyDatabaseRules(): void
+	{
+		$configuration = (new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile());
+		$strictRules = Rules::getStrict($configuration);
+
+		self::assertContains('database.column-allows-null', $strictRules);
+		self::assertNotContains('database.column-rejects-null', $strictRules);
+		self::assertSame([], array_values(array_filter(
+			$strictRules,
+			static fn (string $rule): bool => !Rules::isDatabaseRule($rule),
+		)));
 	}
 
 	/**
 	 * @return list<class-string<Rule>>
 	 */
-	private function getCreatedRuleClasses(bool $database): array
+	private function getExpectedRuleClasses(bool $database, bool $strict): array
+	{
+		$ruleClasses = array_values(array_filter(
+			RuleSetFactory::RULE_CLASSES,
+			static fn (string $ruleClass): bool => ($database || !str_starts_with($ruleClass, __NAMESPACE__ . '\\Database\\'))
+				&& (($database && $strict) || !is_subclass_of($ruleClass, StrictRule::class)),
+		));
+		sort($ruleClasses);
+
+		return $ruleClasses;
+	}
+
+	/**
+	 * @return list<class-string<Rule>>
+	 */
+	private function getCreatedRuleClasses(bool $database, bool $strict): array
 	{
 		$configuration = (new ConfigurationLoader())->load(ConfigurationLoader::getDefaultsFile());
 		$entityManager = $this->createEntityManager(__DIR__);
@@ -60,6 +74,7 @@ final class RuleSetFactoryTest extends FactoryMetadataTestCase
 			new Identifiers($configuration),
 			new AttributeSourceEditor(),
 			$database ? $this->createSchema([]) : null,
+			$strict,
 		);
 
 		$ruleClasses = array_map(static fn (Rule $rule): string => $rule::class, $ruleSet->getRules());

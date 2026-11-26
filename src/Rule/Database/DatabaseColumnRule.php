@@ -4,14 +4,12 @@ namespace Slevomat\DoctrineAttributeChecker\Rule\Database;
 
 use Override;
 use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseColumnComparator;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseExpectationApplier;
 use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseTargetResolver;
 use Slevomat\DoctrineAttributeChecker\Checker\DoctrineAttributeContext;
 use Slevomat\DoctrineAttributeChecker\Checker\ViolationReporter;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
 use Slevomat\DoctrineAttributeChecker\Rule\AttributeRule;
-use function array_push;
 
 final class DatabaseColumnRule implements AttributeRule
 {
@@ -20,7 +18,6 @@ final class DatabaseColumnRule implements AttributeRule
 		private DatabaseSchemaSnapshot $databaseSchema,
 		private DatabaseTargetResolver $targetResolver,
 		private DatabaseColumnComparator $comparator,
-		private DatabaseExpectationApplier $expectationApplier,
 	)
 	{
 	}
@@ -28,20 +25,7 @@ final class DatabaseColumnRule implements AttributeRule
 	#[Override]
 	public static function getIdentifiers(Configuration $configuration): array
 	{
-		return [
-			'database.column-allows-null',
-			'database.column-collation',
-			'database.column-definition',
-			'database.column-fixed',
-			'database.column-length',
-			'database.column-missing',
-			'database.column-precision',
-			'database.column-rejects-null',
-			'database.column-scale',
-			'database.column-type',
-			'database.column-unique',
-			'database.column-unsigned',
-		];
+		return ['database.column-missing', 'database.column-rejects-null', 'database.column-type'];
 	}
 
 	#[Override]
@@ -68,22 +52,15 @@ final class DatabaseColumnRule implements AttributeRule
 			}
 		}
 
-		$expectations = [];
 		foreach ($targets as $target) {
-			array_push(
-				$expectations,
-				...$this->comparator->compare(
-					$context,
-					$reporter,
-					$target->table,
-					$target->fieldMapping,
-					$target->nullableColumnAllowed,
-					nullableInEmbeddingTable: $nullableInEmbeddingTable,
-				),
+			$this->comparator->checkCompatibility(
+				$context,
+				$reporter,
+				$target->table,
+				$target->fieldMapping,
+				$nullableInEmbeddingTable,
 			);
 		}
-
-		$this->expectationApplier->apply($context, $reporter, $expectations);
 	}
 
 }
