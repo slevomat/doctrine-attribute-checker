@@ -1,6 +1,6 @@
 <?php declare(strict_types = 1);
 
-namespace Slevomat\DoctrineAttributeChecker\Checker;
+namespace Slevomat\DoctrineAttributeChecker\Checker\Database;
 
 use function is_bool;
 use function sprintf;

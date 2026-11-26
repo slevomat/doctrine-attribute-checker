@@ -14,6 +14,8 @@ use ReflectionProperty;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
 use function array_key_exists;
 use function is_array;
+use function strlen;
+use function substr;
 
 /**
  * @phpstan-import-type DoctrineAttributeValue from AttributeSourceEditor
@@ -21,6 +23,8 @@ use function is_array;
  */
 final class DoctrineAttributeContext
 {
+
+	public const string MAPPING_NAMESPACE = 'Doctrine\\ORM\\Mapping\\';
 
 	/**
 	 * @param class-string $className
@@ -50,6 +54,11 @@ final class DoctrineAttributeContext
 		public readonly bool $synthetic = false,
 	)
 	{
+	}
+
+	public function getShortAttributeName(): string
+	{
+		return substr($this->attributeClassName, strlen(self::MAPPING_NAMESPACE));
 	}
 
 	/** @param DoctrineAttributeWritableValue $value */
