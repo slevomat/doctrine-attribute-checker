@@ -12,6 +12,7 @@ use PhpParser\Node\Stmt\Property;
 use ReflectionMethod;
 use ReflectionProperty;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
+use Slevomat\DoctrineAttributeChecker\Source\ParsedSourceFile;
 use function array_key_exists;
 use function is_array;
 use function strlen;
@@ -52,6 +53,7 @@ final class DoctrineAttributeContext
 		public readonly bool $databaseOneToOne = false,
 		public readonly bool $databaseJoinTable = false,
 		public readonly bool $synthetic = false,
+		public readonly ?ParsedSourceFile $sourceFile = null,
 	)
 	{
 	}

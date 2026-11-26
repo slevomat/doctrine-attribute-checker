@@ -129,9 +129,9 @@ identifiers:
 ```
 
 A disabled rule is neither reported nor fixed. Unknown rule identifiers in `rules.disabled` are reported as
-a configuration error. The list of rules is in [`src/Rules.php`](src/Rules.php); configured forbidden
-arguments and options add the rules `column.<argument>`, `column.options.<option>`, `table.<argument>`
-and `cache.<argument>`.
+a configuration error. Each rule class in [`src/Rule`](src/Rule) lists the identifiers it reports
+(`getIdentifiers()`); configured forbidden arguments and options add the rules `column.<argument>`,
+`column.options.<option>`, `table.<argument>` and `cache.<argument>`.
 
 The baseline file has the same format as the `ignoreErrors` section:
 
@@ -150,3 +150,10 @@ ignoreErrors:
 composer install
 composer check   # phpcs, phpstan, phpunit
 ```
+
+`Checker\DoctrineAttributeChecker` walks the mapped classes of a file and passes every Doctrine attribute to the rules
+registered in `Rule\RuleSetFactory`. An `AttributeRule` processes attributes with given short names (e.g. `Column`),
+a `ClassRule` processes a mapped class after its class attributes. Rules report violations and apply fixes through
+`Checker\ViolationReporter`. Rules of one attribute run in the order of registration and see the fixes of the
+previous ones, so e.g. `ColumnOrderRule` runs after all rules that add arguments. Rules in `Rule\Database` are
+registered only with `--db`.
