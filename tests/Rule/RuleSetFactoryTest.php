@@ -9,6 +9,7 @@ use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseIdentityColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseJoinColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseTableRule;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
@@ -35,6 +36,7 @@ final class RuleSetFactoryTest extends FactoryMetadataTestCase
 			DatabaseColumnNotInsertedRule::class,
 			DatabaseColumnRule::class,
 			DatabaseDiscriminatorColumnRule::class,
+			DatabaseIdentityColumnRule::class,
 			DatabaseJoinColumnRule::class,
 			DatabaseTableRule::class,
 		]));
