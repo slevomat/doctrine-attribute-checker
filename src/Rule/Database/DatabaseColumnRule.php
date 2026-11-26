@@ -29,13 +29,14 @@ final class DatabaseColumnRule implements AttributeRule
 	public static function getIdentifiers(Configuration $configuration): array
 	{
 		return [
+			'database.column-allows-null',
 			'database.column-collation',
 			'database.column-definition',
 			'database.column-fixed',
 			'database.column-length',
 			'database.column-missing',
-			'database.column-nullability',
 			'database.column-precision',
+			'database.column-rejects-null',
 			'database.column-scale',
 			'database.column-type',
 			'database.column-unique',

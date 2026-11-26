@@ -39,7 +39,7 @@ final class SingleTableInheritanceTest extends FactoryMetadataTestCase
 		]));
 
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is nullable but the database column is not nullable.'],
+			['database.column-rejects-null: PHP/Doctrine nullability is nullable but the database column is not nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}
@@ -51,7 +51,7 @@ final class SingleTableInheritanceTest extends FactoryMetadataTestCase
 		]));
 
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
+			['database.column-allows-null: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}
@@ -92,7 +92,7 @@ final class SingleTableInheritanceTest extends FactoryMetadataTestCase
 			'inheritance_vehicle.type' => self::varcharColumn(20, true),
 		]), configuration: self::ALLOW_INHERITANCE);
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
+			['database.column-allows-null: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
 			$this->formatViolations($result['violations']),
 		);
 

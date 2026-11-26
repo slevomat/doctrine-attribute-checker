@@ -70,7 +70,7 @@ final class EmbeddableTest extends FactoryMetadataTestCase
 		]), false);
 
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is nullable but the database column is not nullable.'],
+			['database.column-rejects-null: PHP/Doctrine nullability is nullable but the database column is not nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}
@@ -82,7 +82,7 @@ final class EmbeddableTest extends FactoryMetadataTestCase
 		]), false);
 
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
+			['database.column-allows-null: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}

@@ -68,7 +68,7 @@ final class MappedSuperclassTest extends FactoryMetadataTestCase
 
 		$result = $this->inspect($schema, false);
 		self::assertSame(
-			['database.join-column-nullability: Doctrine join-column nullability is nullable but the database column is not nullable.'],
+			['database.join-column-rejects-null: Doctrine join-column nullability is nullable but the database column is not nullable.'],
 			$this->formatViolations($result['violations']),
 		);
 	}
