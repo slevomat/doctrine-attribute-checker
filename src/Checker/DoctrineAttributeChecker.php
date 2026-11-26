@@ -6,7 +6,6 @@ namespace Slevomat\DoctrineAttributeChecker\Checker;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
-use Doctrine\ORM\Mapping\FieldMapping;
 use Doctrine\ORM\Mapping\JoinColumnMapping;
 use Doctrine\ORM\Mapping\ManyToManyOwningSideMapping;
 use Doctrine\ORM\Mapping\OneToOneOwningSideMapping;
@@ -22,43 +21,26 @@ use PhpParser\Node\Stmt\Property;
 use PhpParser\NodeFinder;
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionNamedType;
 use ReflectionProperty;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseColumnComparator;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseExpectation;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseExpectationApplier;
-use Slevomat\DoctrineAttributeChecker\Checker\Database\DatabaseTargetResolver;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
-use Slevomat\DoctrineAttributeChecker\Database\DatabaseForeignKey;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
+use Slevomat\DoctrineAttributeChecker\Rule\RuleSet;
+use Slevomat\DoctrineAttributeChecker\Rule\RuleSetFactory;
 use Slevomat\DoctrineAttributeChecker\Source\AttributeSourceEditor;
 use Slevomat\DoctrineAttributeChecker\Source\ParsedSourceFile;
 use Slevomat\DoctrineAttributeChecker\Violation;
 use function array_filter;
-use function array_flip;
-use function array_key_exists;
-use function array_map;
 use function array_merge;
-use function array_push;
-use function array_unique;
 use function array_values;
 use function class_exists;
 use function count;
-use function implode;
 use function in_array;
 use function is_array;
-use function is_string;
 use function ksort;
-use function ltrim;
 use function serialize;
 use function sprintf;
 use function str_ends_with;
 use function str_starts_with;
-use function strlen;
-use function strtolower;
-use function strtoupper;
-use function substr;
-use function usort;
 
 /**
  * @phpstan-type EntityClassMetadata ClassMetadata<object>
@@ -67,14 +49,11 @@ use function usort;
 final class DoctrineAttributeChecker
 {
 
-	private const array LIFECYCLE_CALLBACKS = [
-		'PostLoad',
-		'PostPersist',
-		'PostRemove',
-		'PostUpdate',
-		'PrePersist',
-		'PreRemove',
-		'PreUpdate',
+	public const array RULE_IDENTIFIERS = [
+		'join-table.attribute-missing',
+		'join-table.column-class',
+		'join-table.duplicate-column',
+		'join-table.nested-column',
 	];
 
 	private ?ParsedSourceFile $parsedSourceFile = null;
@@ -85,9 +64,7 @@ final class DoctrineAttributeChecker
 
 	private Identifiers $identifiers;
 
-	private DatabaseTargetResolver $databaseTargetResolver;
-
-	private DatabaseExpectationApplier $expectationApplier;
+	private RuleSet $ruleSet;
 
 	/**
 	 * @param array<class-string, ClassMetadata<object>> $metadataByClassName
@@ -95,18 +72,23 @@ final class DoctrineAttributeChecker
 	 */
 	public function __construct(
 		EntityManagerInterface $entityManager,
-		private Configuration $configuration,
+		Configuration $configuration,
 		private AttributeSourceEditor $sourceEditor,
 		private array $metadataByClassName,
 		private array $mappedClassNames,
-		private ?DatabaseSchemaSnapshot $databaseSchema,
+		?DatabaseSchemaSnapshot $databaseSchema,
 	)
 	{
 		$this->reporter = new ViolationReporter($configuration);
 		$this->mapping = new DoctrineMapping($entityManager, $metadataByClassName);
 		$this->identifiers = new Identifiers($configuration);
-		$this->databaseTargetResolver = new DatabaseTargetResolver($this->mapping);
-		$this->expectationApplier = new DatabaseExpectationApplier();
+		$this->ruleSet = RuleSetFactory::create(
+			$configuration,
+			$this->mapping,
+			$this->identifiers,
+			$sourceEditor,
+			$databaseSchema,
+		);
 	}
 
 	/**
@@ -137,10 +119,6 @@ final class DoctrineAttributeChecker
 
 			$reflectionClass = new ReflectionClass($className);
 			$classMetadata = $this->metadataByClassName[$className] ?? null;
-			if ($classMetadata !== null) {
-				$this->checkDatabaseTable($file, $classNode, $className, $classMetadata);
-			}
-
 			$this->processAttributeGroups(
 				$classNode,
 				$classNode->attrGroups,
@@ -152,28 +130,11 @@ final class DoctrineAttributeChecker
 				$classMetadata,
 			);
 
-			if (
-				$classMetadata !== null
-				&& !$classMetadata->isMappedSuperclass
-				&& !$classMetadata->isEmbeddedClass
-				&& $classMetadata->parentClasses === []
-				&& !$reflectionClass->isAbstract()
-				&& !$this->hasAttribute($classNode, 'Table')
-			) {
-				$tableName = $this->identifiers->escape($classMetadata->getTableName());
-				if ($this->reporter->canFix('table.attribute-missing')) {
-					$this->sourceEditor->addDoctrineAttribute($classNode, 'Table', ['name' => $tableName]);
-					$this->reporter->markChanged();
-				} else {
-					$this->reporter->addViolationAt(
-						$file,
-						$classNode->getStartLine(),
-						$className,
-						'table.attribute-missing',
-						'Concrete entities must declare a Table attribute with an explicit name.',
-						true,
-					);
-				}
+			if ($classMetadata !== null) {
+				$this->ruleSet->processClass(
+					new ClassContext($classNode, $className, $file, $reflectionClass, $classMetadata),
+					$this->reporter,
+				);
 			}
 
 			foreach ($classNode->stmts as $member) {
@@ -190,18 +151,6 @@ final class DoctrineAttributeChecker
 			'changed' => $this->reporter->hasChanges(),
 			'violations' => $this->reporter->getViolations(),
 		];
-	}
-
-	private function hasAttribute(ClassLike|ClassMethod|Property $owner, string $shortName): bool
-	{
-		$expectedClassName = DoctrineAttributeContext::MAPPING_NAMESPACE . $shortName;
-		foreach ($this->sourceEditor->getAttributes($owner->attrGroups) as $attribute) {
-			if ($this->sourceEditor->getAttributeClassName($attribute) === $expectedClassName) {
-				return true;
-			}
-		}
-
-		return false;
 	}
 
 	/**
@@ -360,7 +309,7 @@ final class DoctrineAttributeChecker
 			false,
 			true,
 		);
-		$this->checkJoinColumn($context);
+		$this->ruleSet->processJoinColumn($context, $this->reporter);
 
 		if (!$this->reporter->isFixing() || $context->arguments === []) {
 			return;
@@ -940,7 +889,7 @@ final class DoctrineAttributeChecker
 			false,
 			true,
 		);
-		$this->checkJoinColumn($context);
+		$this->ruleSet->processJoinColumn($context, $this->reporter);
 	}
 
 	private function getDefaultManyToManyJoinColumnName(
@@ -1011,7 +960,7 @@ final class DoctrineAttributeChecker
 			true,
 			true,
 		);
-		$this->checkJoinColumn($context);
+		$this->ruleSet->processJoinColumn($context, $this->reporter);
 
 		if (!$this->reporter->isFixing() || $context->arguments === []) {
 			return;
@@ -1141,976 +1090,10 @@ final class DoctrineAttributeChecker
 				$classMetadata,
 				$arguments,
 				$this->sourceEditor,
+				sourceFile: $this->parsedSourceFile,
 			);
 
-			$this->checkAttribute($context);
-			if (
-				$attributeClassName === DoctrineAttributeContext::MAPPING_NAMESPACE . 'Column'
-				&& $attribute->args === []
-				&& $this->parsedSourceFile !== null
-				&& $this->sourceEditor->hasEmptyParentheses($attribute, $this->parsedSourceFile)
-			) {
-				$this->reporter->fixViolation(
-					$context,
-					'column.empty-parentheses',
-					'Column attributes without arguments should not use empty parentheses.',
-					fn (): bool => $this->sourceEditor->removeEmptyParentheses($attribute, $owner),
-				);
-			}
-		}
-	}
-
-	private function checkAttribute(DoctrineAttributeContext $context): void
-	{
-		$shortName = substr($context->attributeClassName, strlen(DoctrineAttributeContext::MAPPING_NAMESPACE));
-		if (in_array($shortName, $this->configuration->forbiddenAttributes, true)) {
-			$this->checkForbiddenAttribute($context, $shortName);
-
-			return;
-		}
-
-		if (in_array($shortName, self::LIFECYCLE_CALLBACKS, true) || $shortName === 'HasLifecycleCallbacks') {
-			if ($this->isAllowedLifecycleCallback($context, $shortName)) {
-				return;
-			}
-
-			$this->reporter->addViolation(
-				$context,
-				'forbidden.lifecycle-callback',
-				sprintf('Doctrine lifecycle callback attribute %s is not used.', $shortName),
-			);
-
-			return;
-		}
-
-		switch ($shortName) {
-			case 'Column':
-				$this->checkColumn($context);
-
-				return;
-			case 'JoinColumn':
-			case 'InverseJoinColumn':
-				$this->checkJoinColumn($context);
-
-				return;
-			case 'Table':
-				$this->checkTable($context);
-
-				return;
-			case 'JoinTable':
-				$this->checkJoinTable($context);
-
-				return;
-			case 'ManyToOne':
-			case 'OneToOne':
-				$this->checkToOneAssociation($context, $shortName);
-
-				return;
-			case 'OneToMany':
-			case 'ManyToMany':
-				$this->checkToManyAssociation($context, $shortName);
-
-				return;
-			case 'Embedded':
-				$this->checkEmbedded($context);
-
-				return;
-			case 'DiscriminatorColumn':
-				if ($this->databaseSchema !== null) {
-					$this->checkDatabaseDiscriminatorColumn($context);
-				}
-
-				return;
-			case 'Entity':
-				$this->checkEntity($context);
-
-				return;
-			case 'Cache':
-				$this->checkCache($context);
-
-				return;
-			case 'GeneratedValue':
-				$this->checkGeneratedValue($context);
-
-				return;
-		}
-	}
-
-	private function checkForbiddenAttribute(DoctrineAttributeContext $context, string $shortName): void
-	{
-		$this->reporter->addViolation(
-			$context,
-			'forbidden.attribute',
-			sprintf('Doctrine attribute %s is forbidden.', $shortName),
-		);
-	}
-
-	private function isAllowedLifecycleCallback(DoctrineAttributeContext $context, string $shortName): bool
-	{
-		if ($context->property !== null) {
-			return false;
-		}
-
-		return $this->configuration->isLifecycleCallbackAllowed(
-			$context->className,
-			$context->method?->name,
-			$shortName,
-		);
-	}
-
-	private function checkEntity(DoctrineAttributeContext $context): void
-	{
-		if (!array_key_exists('repositoryClass', $context->arguments)) {
-			return;
-		}
-
-		$repositoryClass = $context->arguments['repositoryClass'];
-		if (is_string($repositoryClass)) {
-			$repositoryClass = ltrim($repositoryClass, '\\');
-		}
-
-		if ($repositoryClass === $this->mapping->getOrmConfiguration()->getDefaultRepositoryClassName()) {
-			$this->reporter->fixViolation(
-				$context,
-				'entity.repository-class',
-				'Entity.repositoryClass is redundant because the repository class is configured globally.',
-				static fn (): bool => $context->removeArgument('repositoryClass'),
-			);
-
-			return;
-		}
-
-		if ($this->configuration->allowCustomRepositoryClass) {
-			return;
-		}
-
-		$this->reporter->addViolation(
-			$context,
-			'entity.repository-class',
-			'Entity.repositoryClass is forbidden; repositories are standalone classes.',
-		);
-	}
-
-	private function checkCache(DoctrineAttributeContext $context): void
-	{
-		foreach ($this->configuration->forbiddenCacheArguments as $argumentName) {
-			if (!array_key_exists($argumentName, $context->arguments)) {
-				continue;
-			}
-
-			$this->reporter->addViolation(
-				$context,
-				'cache.' . $argumentName,
-				sprintf('Cache.%s is forbidden; use the configured cache defaults.', $argumentName),
-			);
-		}
-	}
-
-	private function checkGeneratedValue(DoctrineAttributeContext $context): void
-	{
-		if (!array_key_exists('strategy', $context->arguments)) {
-			return;
-		}
-
-		$strategy = $context->arguments['strategy'];
-		if (!is_string($strategy)) {
-			$this->reporter->addViolation(
-				$context,
-				'generated-value.strategy',
-				'GeneratedValue.strategy must be a string.',
-			);
-
-			return;
-		}
-
-		if (strtoupper($strategy) === 'NONE') {
-			$this->reporter->fixViolation(
-				$context,
-				'generated-value.strategy',
-				'GeneratedValue with the NONE strategy is redundant; identifiers without GeneratedValue are not generated.',
-				static fn (): bool => $context->removeFromSource(),
-			);
-
-			return;
-		}
-
-		if (strtoupper($strategy) === 'AUTO') {
-			$this->reporter->fixViolation(
-				$context,
-				'generated-value.strategy',
-				'GeneratedValue.strategy is redundant when it uses the default AUTO strategy.',
-				static fn (): bool => $context->removeArgument('strategy'),
-			);
-
-			return;
-		}
-
-		$this->reporter->addViolation(
-			$context,
-			'generated-value.strategy',
-			'GeneratedValue.strategy is forbidden; use the default AUTO strategy.',
-		);
-	}
-
-	private function checkColumn(DoctrineAttributeContext $context): void
-	{
-		$this->identifiers->checkName($context, $this->reporter, 'name', $this->mapping->getDefaultColumnName($context));
-		$this->checkColumnType($context);
-
-		if (array_key_exists('nullable', $context->arguments)) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.nullable',
-				'Column.nullable is inferred from the PHP property type.',
-				static fn (): bool => $context->removeArgument('nullable'),
-			);
-		}
-
-		if (($context->arguments['unique'] ?? null) === false) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.unique',
-				'Column.unique=false is the default and should be omitted.',
-				static fn (): bool => $context->removeArgument('unique'),
-			);
-		}
-
-		$options = $context->arguments['options'] ?? [];
-		if (is_array($options)) {
-			foreach ($this->configuration->forbiddenColumnOptions as $optionName) {
-				if (!array_key_exists($optionName, $options)) {
-					continue;
-				}
-
-				$this->reporter->fixViolation(
-					$context,
-					'column.options.' . $optionName,
-					sprintf('Column.options.%s is not maintained in Doctrine mapping.', $optionName),
-					static fn (): bool => $context->removeOption($optionName),
-				);
-			}
-
-		}
-
-		foreach ($this->configuration->forbiddenColumnArguments as $argumentName) {
-			if (!array_key_exists($argumentName, $context->arguments)) {
-				continue;
-			}
-
-			$this->reporter->addViolation(
-				$context,
-				'column.' . $argumentName,
-				sprintf('Column.%s is forbidden.', $argumentName),
-			);
-		}
-
-		if ($this->databaseSchema !== null) {
-			$this->checkDatabaseColumn($context);
-		}
-
-		$options = $context->arguments['options'] ?? [];
-		if (is_array($options) && !$context->optionsAreSorted($this->configuration->columnOptionOrder)) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.options.order',
-				'Column.options must use the canonical key order.',
-				fn (): bool => $context->sortOptions($this->configuration->columnOptionOrder),
-			);
-		}
-
-		if (!$context->argumentsAreSorted($this->configuration->columnArgumentOrder)) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.argument-order',
-				'Column arguments must use the canonical order.',
-				fn (): bool => $context->sortArguments($this->configuration->columnArgumentOrder),
-			);
-		}
-	}
-
-	private function checkColumnType(DoctrineAttributeContext $context): void
-	{
-		if ($context->property === null) {
-			return;
-		}
-
-		$typedFieldMapper = $this->mapping->getOrmConfiguration()->getTypedFieldMapper();
-		if ($typedFieldMapper === null) {
-			return;
-		}
-
-		$inferredMapping = $typedFieldMapper->validateAndComplete(
-			['fieldName' => $context->property->name],
-			$context->property,
-		);
-		$inferredType = $inferredMapping['type'] ?? null;
-		if ($inferredType === 'json' && !array_key_exists('type', $context->arguments)) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.type-json',
-				'Column.type must be explicitly specified for a JSON property.',
-				static fn (): bool => $context->setArgument('type', 'json'),
-			);
-		} elseif (
-			$inferredType !== 'json'
-			&& is_string($inferredType)
-			&& ($context->arguments['type'] ?? null) === $inferredType
-		) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.type',
-				sprintf('Column.type is inferred as %s from the PHP property type.', $inferredType),
-				static fn (): bool => $context->removeArgument('type'),
-			);
-		}
-
-		$inferredEnumType = $inferredMapping['enumType'] ?? null;
-		if (is_string($inferredEnumType) && ($context->arguments['enumType'] ?? null) === $inferredEnumType) {
-			$this->reporter->fixViolation(
-				$context,
-				'column.enum-type',
-				sprintf('Column.enumType is inferred as %s from the PHP property type.', $inferredEnumType),
-				static fn (): bool => $context->removeArgument('enumType'),
-			);
-		}
-	}
-
-	private function checkJoinColumn(DoctrineAttributeContext $context): void
-	{
-		if (array_key_exists('onDelete', $context->arguments)) {
-			$this->reporter->fixViolation(
-				$context,
-				'join-column.on-delete',
-				sprintf('%s.onDelete is not maintained in Doctrine mapping.', $context->getShortAttributeName()),
-				static fn (): bool => $context->removeArgument('onDelete'),
-			);
-		}
-
-		if ($context->databaseJoinTable) {
-			$name = $context->arguments['name'] ?? null;
-			if (!is_string($name)) {
-				$defaultName = $context->databaseJoinColumn->name
-					?? $context->defaultName
-					?? $this->mapping->getDefaultJoinColumnName($context);
-				if ($defaultName === null) {
-					$this->reporter->addViolation(
-						$context,
-						'join-column.name',
-						'ManyToMany join columns must specify a name explicitly.',
-					);
-				} else {
-					$this->reporter->fixViolation(
-						$context,
-						'join-column.name',
-						'ManyToMany join columns must specify a name explicitly.',
-						static fn (): bool => $context->setArgument('name', $defaultName),
-					);
-				}
-			}
-
-			$this->identifiers->checkQuoting($context, $this->reporter, 'name');
-		} else {
-			$this->identifiers->checkName(
-				$context,
-				$this->reporter,
-				'name',
-				$context->defaultName ?? $this->mapping->getDefaultJoinColumnName($context),
-			);
-		}
-
-		if (($context->arguments['referencedColumnName'] ?? null) === 'id') {
-			$this->reporter->fixViolation(
-				$context,
-				'join-column.referenced-column-name',
-				'JoinColumn.referencedColumnName is inferred as id.',
-				static fn (): bool => $context->removeArgument('referencedColumnName'),
-			);
-		} elseif (array_key_exists('referencedColumnName', $context->arguments)) {
-			$this->identifiers->checkQuoting($context, $this->reporter, 'referencedColumnName');
-		}
-
-		if (array_key_exists('nullable', $context->arguments)) {
-			$propertyType = $context->property?->getType();
-			if (
-				$context->arguments['nullable'] === false
-				&& (
-					$propertyType === null
-					|| $propertyType->allowsNull()
-				)
-			) {
-				$this->reporter->addViolation(
-					$context,
-					'join-column.nullable',
-					'JoinColumn.nullable=false conflicts with the nullable PHP property type.',
-				);
-			} else {
-				$this->reporter->fixViolation(
-					$context,
-					'join-column.nullable',
-					'JoinColumn.nullable is inferred from the PHP property type.',
-					static fn (): bool => $context->removeArgument('nullable'),
-				);
-			}
-		}
-
-		if (($context->arguments['unique'] ?? null) === false) {
-			$this->reporter->fixViolation(
-				$context,
-				'join-column.unique',
-				'JoinColumn.unique=false is the default and should be omitted.',
-				static fn (): bool => $context->removeArgument('unique'),
-			);
-		}
-
-		if ($this->databaseSchema !== null) {
-			$this->checkDatabaseJoinColumn($context);
-		}
-
-		if ($context->arguments === [] && !$context->synthetic && !$context->databaseJoinTable) {
-			$this->reporter->fixViolation(
-				$context,
-				'join-column.empty',
-				'JoinColumn has no arguments and can be inferred.',
-				static fn (): bool => $context->removeFromSource(),
-			);
-		}
-	}
-
-	private function checkTable(DoctrineAttributeContext $context): void
-	{
-		if (!array_key_exists('name', $context->arguments) || !is_string($context->arguments['name'])) {
-			$tableName = $context->classMetadata?->getTableName();
-			if ($tableName !== null) {
-				$this->reporter->fixViolation(
-					$context,
-					'table.name',
-					'Table.name must be specified explicitly.',
-					static fn (): bool => $context->setArgument('name', $tableName),
-				);
-			} else {
-				$this->reporter->addViolation(
-					$context,
-					'table.name',
-					'Table.name must be specified explicitly.',
-				);
-			}
-		}
-
-		if (isset($context->arguments['name']) && is_string($context->arguments['name'])) {
-			$this->identifiers->checkQuoting($context, $this->reporter, 'name');
-		}
-
-		if (array_key_exists('uniqueConstraints', $context->arguments)) {
-			$this->reporter->fixViolation(
-				$context,
-				'table.unique-constraints',
-				'Table.uniqueConstraints is not maintained in Doctrine mapping; unique indexes are synchronized from the database.',
-				static fn (): bool => $context->removeArgument('uniqueConstraints'),
-			);
-		}
-
-		foreach ($this->configuration->forbiddenTableArguments as $argumentName) {
-			if (!array_key_exists($argumentName, $context->arguments)) {
-				continue;
-			}
-
-			$this->reporter->addViolation(
-				$context,
-				'table.' . $argumentName,
-				sprintf('Table.%s is not maintained in Doctrine mapping.', $argumentName),
-			);
-		}
-	}
-
-	private function checkJoinTable(DoctrineAttributeContext $context): void
-	{
-		if (!array_key_exists('name', $context->arguments) || !is_string($context->arguments['name'])) {
-			$propertyName = $context->property?->name;
-			$associationMapping = $propertyName === null
-				? null
-				: ($context->classMetadata?->associationMappings[$propertyName] ?? null);
-			if (!$associationMapping instanceof ManyToManyOwningSideMapping) {
-				$this->reporter->addViolation(
-					$context,
-					'join-table.name',
-					'JoinTable.name must be specified explicitly.',
-				);
-
-				return;
-			}
-
-			$this->reporter->fixViolation(
-				$context,
-				'join-table.name',
-				'JoinTable.name must be specified explicitly.',
-				static fn (): bool => $context->setArgument('name', $associationMapping->joinTable->name),
-			);
-		}
-
-		$this->identifiers->checkQuoting($context, $this->reporter, 'name');
-	}
-
-	private function checkToOneAssociation(DoctrineAttributeContext $context, string $attributeName): void
-	{
-		$this->checkCascadeOrder($context, $attributeName);
-
-		if (($context->arguments['fetch'] ?? null) === 'LAZY') {
-			$this->reporter->fixViolation(
-				$context,
-				strtolower($attributeName) . '.fetch',
-				sprintf('%s.fetch is LAZY by default.', $attributeName),
-				static fn (): bool => $context->removeArgument('fetch'),
-			);
-		}
-
-		if ($attributeName === 'OneToOne' && ($context->arguments['orphanRemoval'] ?? null) === false) {
-			$this->reporter->fixViolation(
-				$context,
-				'onetoone.orphan-removal',
-				'OneToOne.orphanRemoval is false by default.',
-				static fn (): bool => $context->removeArgument('orphanRemoval'),
-			);
-		}
-
-		if ($context->property === null || !array_key_exists('targetEntity', $context->arguments)) {
-			return;
-		}
-
-		$propertyType = $context->property->getType();
-		if (!$propertyType instanceof ReflectionNamedType || $propertyType->isBuiltin()) {
-			return;
-		}
-
-		$targetEntity = $context->arguments['targetEntity'];
-		if (!is_string($targetEntity)) {
-			$this->reporter->addViolation(
-				$context,
-				strtolower($attributeName) . '.target-entity',
-				sprintf('%s.targetEntity must be a class name string.', $attributeName),
-			);
-
-			return;
-		}
-
-		$targetEntity = ltrim($targetEntity, '\\');
-		if ($targetEntity === $propertyType->getName()) {
-			$this->reporter->fixViolation(
-				$context,
-				strtolower($attributeName) . '.target-entity',
-				sprintf('%s.targetEntity is inferred from the PHP property type.', $attributeName),
-				static fn (): bool => $context->removeArgument('targetEntity'),
-			);
-
-			return;
-		}
-
-		$this->reporter->addViolation(
-			$context,
-			strtolower($attributeName) . '.target-entity',
-			sprintf(
-				'%s.targetEntity %s does not match the property type %s.',
-				$attributeName,
-				$targetEntity,
-				$propertyType->getName(),
-			),
-		);
-	}
-
-	private function checkToManyAssociation(DoctrineAttributeContext $context, string $attributeName): void
-	{
-		$this->checkCascadeOrder($context, $attributeName);
-
-		if (($context->arguments['fetch'] ?? null) === 'LAZY') {
-			$this->reporter->fixViolation(
-				$context,
-				strtolower($attributeName) . '.fetch',
-				sprintf('%s.fetch is LAZY by default.', $attributeName),
-				static fn (): bool => $context->removeArgument('fetch'),
-			);
-		}
-
-		if (($context->arguments['orphanRemoval'] ?? null) === false) {
-			$this->reporter->fixViolation(
-				$context,
-				strtolower($attributeName) . '.orphan-removal',
-				sprintf('%s.orphanRemoval is false by default.', $attributeName),
-				static fn (): bool => $context->removeArgument('orphanRemoval'),
-			);
-		}
-	}
-
-	private function checkCascadeOrder(DoctrineAttributeContext $context, string $attributeName): void
-	{
-		$cascade = $context->arguments['cascade'] ?? null;
-		if (!is_array($cascade)) {
-			return;
-		}
-
-		$cascadeValues = [];
-		foreach ($cascade as $action) {
-			if (!is_string($action)) {
-				$this->reporter->addViolation(
-					$context,
-					strtolower($attributeName) . '.cascade-values',
-					sprintf('%s.cascade must contain only strings.', $attributeName),
-				);
-
-				return;
-			}
-
-			$cascadeValues[] = $action;
-		}
-		if ($cascadeValues === []) {
-			return;
-		}
-
-		$sortedCascade = array_values(array_unique($cascadeValues));
-		$order = array_flip($this->configuration->cascadeOrder);
-		usort(
-			$sortedCascade,
-			static fn (string $a, string $b): int => ($order[$a] ?? count($order))
-				<=> ($order[$b] ?? count($order))
-				?: $a <=> $b,
-		);
-		if ($sortedCascade === $cascadeValues) {
-			return;
-		}
-
-		$cascadeOrder = $this->configuration->cascadeOrder;
-		$this->reporter->fixViolation(
-			$context,
-			strtolower($attributeName) . '.cascade-order',
-			sprintf('%s.cascade must use the canonical order and contain no duplicates.', $attributeName),
-			static fn (): bool => $context->normalizeStringArrayArgument('cascade', $cascadeOrder),
-		);
-	}
-
-	private function checkEmbedded(DoctrineAttributeContext $context): void
-	{
-		if ($context->property === null || !array_key_exists('class', $context->arguments)) {
-			return;
-		}
-
-		$propertyType = $context->property->getType();
-		if (!$propertyType instanceof ReflectionNamedType || $propertyType->isBuiltin()) {
-			return;
-		}
-
-		$embeddedClass = $context->arguments['class'];
-		if (!is_string($embeddedClass)) {
-			$this->reporter->addViolation(
-				$context,
-				'embedded.class',
-				'Embedded.class must be a class name string.',
-			);
-
-			return;
-		}
-
-		$embeddedClass = ltrim($embeddedClass, '\\');
-		if ($embeddedClass !== $propertyType->getName()) {
-			return;
-		}
-
-		$this->reporter->fixViolation(
-			$context,
-			'embedded.class',
-			'Embedded.class is inferred from the PHP property type.',
-			static fn (): bool => $context->removeArgument('class'),
-		);
-	}
-
-	private function checkDatabaseColumn(DoctrineAttributeContext $context): void
-	{
-		$databaseSchema = $this->databaseSchema;
-		if ($databaseSchema === null || $context->property === null || $context->classMetadata === null) {
-			return;
-		}
-
-		$targets = $this->databaseTargetResolver->getFieldTargets($context->classMetadata, $context->property->name);
-		$nullableInEmbeddingTable = false;
-		if ($context->classMetadata->isEmbeddedClass) {
-			foreach ($targets as $target) {
-				if ($databaseSchema->getColumn($target->table, $target->fieldMapping->columnName)?->nullable === true) {
-					$nullableInEmbeddingTable = true;
-					break;
-				}
-			}
-		}
-
-		$comparator = new DatabaseColumnComparator($this->mapping, $databaseSchema);
-		$expectations = [];
-		foreach ($targets as $target) {
-			array_push(
-				$expectations,
-				...$comparator->compare(
-					$context,
-					$this->reporter,
-					$target->table,
-					$target->fieldMapping,
-					$target->nullableColumnAllowed,
-					nullableInEmbeddingTable: $nullableInEmbeddingTable,
-				),
-			);
-		}
-
-		$this->expectationApplier->apply($context, $this->reporter, $expectations);
-	}
-
-	private function checkDatabaseDiscriminatorColumn(DoctrineAttributeContext $context): void
-	{
-		$databaseSchema = $this->databaseSchema;
-		$discriminatorColumn = $context->classMetadata?->discriminatorColumn;
-		if ($databaseSchema === null || $context->classMetadata === null || $discriminatorColumn === null) {
-			return;
-		}
-
-		$fieldMapping = FieldMapping::fromMappingArray([
-			'type' => $discriminatorColumn->type,
-			'fieldName' => $discriminatorColumn->fieldName,
-			'columnName' => $discriminatorColumn->name,
-			'length' => $discriminatorColumn->length,
-			'columnDefinition' => $discriminatorColumn->columnDefinition,
-			'options' => $discriminatorColumn->options,
-			'nullable' => false,
-		]);
-		$expectations = array_filter(
-			(new DatabaseColumnComparator($this->mapping, $databaseSchema))->compare(
-				$context,
-				$this->reporter,
-				$context->classMetadata->getTableName(),
-				$fieldMapping,
-				false,
-				'DiscriminatorColumn',
-			),
-			static fn (DatabaseExpectation $expectation): bool => $expectation->option
-				|| in_array($expectation->name, ['length', 'columnDefinition'], true),
-		);
-
-		$this->expectationApplier->apply($context, $this->reporter, array_values($expectations));
-	}
-
-	private function checkDatabaseJoinColumn(DoctrineAttributeContext $context): void
-	{
-		$databaseSchema = $this->databaseSchema;
-		if ($databaseSchema === null || $context->classMetadata === null) {
-			return;
-		}
-
-		$expectations = [];
-		foreach ($this->databaseTargetResolver->getJoinColumnTargets($context) as $target) {
-			$expectation = $this->checkDatabaseJoinColumnInTable(
-				$context,
-				$databaseSchema,
-				$target->table,
-				$target->referencedTable,
-				$target->oneToOne,
-				$target->joinColumn,
-				$target->association,
-				$target->singleTableSubclass,
-			);
-			if ($expectation === null) {
-				continue;
-			}
-
-			$expectations[] = $expectation;
-		}
-
-		$this->expectationApplier->apply($context, $this->reporter, $expectations);
-	}
-
-	private function checkDatabaseJoinColumnInTable(
-		DoctrineAttributeContext $context,
-		DatabaseSchemaSnapshot $databaseSchema,
-		string $tableName,
-		string $referencedTableName,
-		bool $isOneToOne,
-		JoinColumnMapping $joinColumnMapping,
-		?ToOneOwningSideMapping $associationMapping,
-		bool $singleTableSubclass,
-	): ?DatabaseExpectation
-	{
-		$columnName = $context->arguments['name'] ?? $joinColumnMapping->name;
-		if (!is_string($columnName)) {
-			return null;
-		}
-
-		if ($associationMapping !== null) {
-			foreach ($associationMapping->joinColumns as $associationJoinColumn) {
-				if ($associationJoinColumn->name !== $columnName) {
-					continue;
-				}
-
-				$joinColumnMapping = $associationJoinColumn;
-
-				break;
-			}
-		}
-
-		$databaseColumn = $databaseSchema->getColumn($tableName, $columnName);
-		if ($databaseColumn === null) {
-			$this->reporter->addViolation(
-				$context,
-				'database.join-column-missing',
-				sprintf('Join column %s.%s does not exist in database %s.', $tableName, $columnName, $databaseSchema->getSchema()),
-			);
-
-			return null;
-		}
-
-		$expectedNullable = $joinColumnMapping->nullable ?? true;
-		if ($databaseColumn->nullable !== $expectedNullable && !($singleTableSubclass && $databaseColumn->nullable)) {
-			$this->reporter->addViolation(
-				$context,
-				'database.join-column-nullability',
-				sprintf(
-					'Doctrine join-column nullability is %s but the database column is %s.',
-					$expectedNullable ? 'nullable' : 'not nullable',
-					$databaseColumn->nullable ? 'nullable' : 'not nullable',
-				),
-			);
-		}
-
-		$this->checkDatabaseJoinColumnForeignKey(
-			$context,
-			$databaseSchema,
-			$tableName,
-			$columnName,
-			$referencedTableName,
-			$joinColumnMapping,
-		);
-
-		$databaseUnique = $databaseSchema->isSingleColumnUnique($tableName, $columnName);
-		$databasePrimaryKey = $databaseSchema->isSingleColumnPrimaryKey($tableName, $columnName);
-		if ($isOneToOne) {
-			if (!$databaseUnique && !$databasePrimaryKey) {
-				$this->reporter->addViolation(
-					$context,
-					'database.one-to-one-unique',
-					'An owning OneToOne join column must have a single-column unique index in the database.',
-				);
-			}
-
-			return null;
-		}
-
-		return new DatabaseExpectation(
-			false,
-			'unique',
-			$databaseUnique ? true : null,
-			'database.join-column-unique',
-			'JoinColumn.unique must match the single-column unique index in the database.',
-			sprintf('%s.%s', $tableName, $columnName),
-		);
-	}
-
-	private function checkDatabaseJoinColumnForeignKey(
-		DoctrineAttributeContext $context,
-		DatabaseSchemaSnapshot $databaseSchema,
-		string $tableName,
-		string $columnName,
-		string $referencedTableName,
-		JoinColumnMapping $joinColumnMapping,
-	): void
-	{
-		$foreignKeys = $databaseSchema->getForeignKeys($tableName, $columnName);
-		if ($foreignKeys === []) {
-			return;
-		}
-
-		$expectedReferencedTableName = Identifiers::unquote($referencedTableName);
-		$expectedReferencedColumnName = Identifiers::unquote($joinColumnMapping->referencedColumnName);
-		foreach ($foreignKeys as $foreignKey) {
-			if ($databaseSchema->areTargetsEquivalentViaPrimaryKeyForeignKeys(
-				$foreignKey->referencedTable,
-				$foreignKey->referencedColumn,
-				$expectedReferencedTableName,
-				$expectedReferencedColumnName,
-			)) {
-				return;
-			}
-		}
-
-		$actualTargets = array_map(
-			static fn (DatabaseForeignKey $foreignKey): string => sprintf(
-				'%s.%s',
-				$foreignKey->referencedTable,
-				$foreignKey->referencedColumn,
-			),
-			$foreignKeys,
-		);
-		$this->reporter->addViolation(
-			$context,
-			'database.join-column-foreign-key-target',
-			sprintf(
-				'Join column %s.%s references %s, expected %s.%s.',
-				$tableName,
-				$columnName,
-				implode(', ', $actualTargets),
-				$expectedReferencedTableName,
-				$expectedReferencedColumnName,
-			),
-		);
-	}
-
-	/**
-	 * @param class-string $className
-	 * @param EntityClassMetadata $classMetadata
-	 */
-	private function checkDatabaseTable(
-		string $file,
-		ClassLike $classNode,
-		string $className,
-		ClassMetadata $classMetadata,
-	): void
-	{
-		$databaseSchema = $this->databaseSchema;
-		if (
-			$databaseSchema === null
-			|| $classMetadata->isMappedSuperclass
-			|| $classMetadata->isEmbeddedClass
-			|| (new ReflectionClass($className))->isAbstract()
-		) {
-			return;
-		}
-
-		$tableSchema = $classMetadata->table['schema'] ?? null;
-		if (is_string($tableSchema) && $tableSchema !== $databaseSchema->getSchema()) {
-			return;
-		}
-
-		$tableName = $classMetadata->getTableName();
-		if (!$databaseSchema->hasTable($tableName)) {
-			$this->reporter->addViolationAt(
-				$file,
-				$classNode->getStartLine(),
-				$className,
-				'database.table-missing',
-				sprintf('Table %s does not exist in database %s.', $tableName, $databaseSchema->getSchema()),
-				false,
-			);
-		}
-
-		foreach ($classMetadata->associationMappings as $associationMapping) {
-			if (!$associationMapping instanceof ManyToManyOwningSideMapping) {
-				continue;
-			}
-
-			$joinTableName = $associationMapping->joinTable->name;
-			if (!$databaseSchema->hasTable($joinTableName)) {
-				$this->reporter->addViolationAt(
-					$file,
-					$classNode->getStartLine(),
-					sprintf('%s::$%s', $className, $associationMapping->fieldName),
-					'database.join-table-missing',
-					sprintf(
-						'Join table %s does not exist in database %s.',
-						$joinTableName,
-						$databaseSchema->getSchema(),
-					),
-					false,
-				);
-			}
+			$this->ruleSet->processAttribute($context, $this->reporter);
 		}
 	}
 
