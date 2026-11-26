@@ -60,6 +60,7 @@ final class DoctrineAttributeChecker
 		private array $metadataByClassName,
 		private array $mappedClassNames,
 		?DatabaseSchemaSnapshot $databaseSchema,
+		bool $strictDatabaseRules = false,
 	)
 	{
 		$this->reporter = new ViolationReporter($configuration);
@@ -71,6 +72,7 @@ final class DoctrineAttributeChecker
 			$this->identifiers,
 			$sourceEditor,
 			$databaseSchema,
+			$strictDatabaseRules,
 		);
 		$this->joinTableNormalizer = new JoinTableNormalizer(
 			$sourceEditor,

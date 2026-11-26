@@ -2,6 +2,7 @@
 
 namespace Slevomat\DoctrineAttributeChecker\Console;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Mapping\ClassMetadataFactory;
@@ -227,6 +228,37 @@ class CheckAttributesCommandTest extends TestCase
 		self::assertSame(Command::SUCCESS, $status, $tester->getDisplay());
 	}
 
+	public function testStrictRequiresDatabase(): void
+	{
+		$configurationFile = $this->writeConfiguration(self::CONFIGURATION);
+		$tester = $this->createTester();
+
+		$status = $tester->execute(['--configuration' => $configurationFile, '--strict' => true]);
+
+		self::assertSame(Command::INVALID, $status);
+		self::assertStringContainsString('--strict can be used only with --db.', $tester->getDisplay());
+	}
+
+	public function testUnmatchedStrictBaselineEntryIsReportedOnlyInStrictMode(): void
+	{
+		$configurationFile = $this->writeConfiguration(<<<'NEON'
+			ignoreErrors:
+				-
+					rule: database.column-length
+					target: App\Missing::$name
+					path: app/Missing.php
+					message: Column.length must match the database column length.
+			NEON);
+
+		$tester = $this->createTester(true);
+		$tester->execute(['--configuration' => $configurationFile, '--db' => true]);
+		self::assertStringNotContainsString('unmatched', $tester->getDisplay());
+
+		$tester = $this->createTester(true);
+		$tester->execute(['--configuration' => $configurationFile, '--db' => true, '--strict' => true]);
+		self::assertStringContainsString('[ERROR] Found 1 unmatched Doctrine attribute baseline entry.', $tester->getDisplay());
+	}
+
 	public function testGenerateBaselineCannotBeCombinedWithFix(): void
 	{
 		$configurationFile = $this->writeConfiguration(self::CONFIGURATION);
@@ -291,12 +323,12 @@ class CheckAttributesCommandTest extends TestCase
 		return $file;
 	}
 
-	private function createTester(): CommandTester
+	private function createTester(bool $database = false): CommandTester
 	{
-		return new CommandTester(new CheckAttributesCommand($this->createEntityManager()));
+		return new CommandTester(new CheckAttributesCommand($this->createEntityManager($database)));
 	}
 
-	private function createEntityManager(): EntityManagerInterface
+	private function createEntityManager(bool $database = false): EntityManagerInterface
 	{
 		$configuration = FixtureMetadata::createOrmConfiguration();
 		$metadataByClassName = FixtureMetadata::load($configuration);
@@ -314,6 +346,15 @@ class CheckAttributesCommandTest extends TestCase
 			->willReturnCallback(
 				static fn (string $className): ClassMetadata => $metadataByClassName[$className],
 			);
+		if ($database) {
+			$connection = self::createStub(Connection::class);
+			$connection->method('getDatabase')
+				->willReturn('attribute_check');
+			$connection->method('fetchAllAssociative')
+				->willReturn([]);
+			$entityManager->method('getConnection')
+				->willReturn($connection);
+		}
 
 		return $entityManager;
 	}

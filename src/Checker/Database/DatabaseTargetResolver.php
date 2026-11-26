@@ -14,6 +14,7 @@ use Slevomat\DoctrineAttributeChecker\Checker\DoctrineMapping;
 use function array_values;
 use function class_exists;
 use function explode;
+use function is_string;
 use function ksort;
 use function property_exists;
 use function sprintf;
@@ -148,6 +149,24 @@ final class DatabaseTargetResolver
 		ksort($targets);
 
 		return array_values($targets);
+	}
+
+	public function getJoinColumnName(DoctrineAttributeContext $context, DatabaseJoinColumnTarget $target): ?string
+	{
+		$columnName = $context->arguments['name'] ?? $target->joinColumn->name;
+
+		return is_string($columnName) ? $columnName : null;
+	}
+
+	public function getJoinColumnMapping(DatabaseJoinColumnTarget $target, string $columnName): JoinColumnMapping
+	{
+		foreach ($target->association->joinColumns ?? [] as $associationJoinColumn) {
+			if ($associationJoinColumn->name === $columnName) {
+				return $associationJoinColumn;
+			}
+		}
+
+		return $target->joinColumn;
 	}
 
 	/**

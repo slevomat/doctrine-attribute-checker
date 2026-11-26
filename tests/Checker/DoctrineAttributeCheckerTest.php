@@ -1869,6 +1869,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 			self::$metadataByClassName,
 			[$className => true],
 			$databaseSchema,
+			true,
 		);
 	}
 

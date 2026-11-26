@@ -5,9 +5,11 @@ namespace Slevomat\DoctrineAttributeChecker;
 use Slevomat\DoctrineAttributeChecker\Checker\JoinTableNormalizer;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Rule\RuleSetFactory;
+use Slevomat\DoctrineAttributeChecker\Rule\StrictRule;
 use function array_push;
 use function array_unique;
 use function array_values;
+use function is_subclass_of;
 use function sort;
 use function str_ends_with;
 use function str_starts_with;
@@ -28,6 +30,26 @@ final class Rules
 	{
 		$rules = JoinTableNormalizer::RULE_IDENTIFIERS;
 		foreach (RuleSetFactory::RULE_CLASSES as $ruleClass) {
+			array_push($rules, ...$ruleClass::getIdentifiers($configuration));
+		}
+
+		$rules = array_values(array_unique($rules));
+		sort($rules);
+
+		return $rules;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public static function getStrict(Configuration $configuration): array
+	{
+		$rules = [];
+		foreach (RuleSetFactory::RULE_CLASSES as $ruleClass) {
+			if (!is_subclass_of($ruleClass, StrictRule::class)) {
+				continue;
+			}
+
 			array_push($rules, ...$ruleClass::getIdentifiers($configuration));
 		}
 
