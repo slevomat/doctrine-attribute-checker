@@ -6,6 +6,7 @@ use Slevomat\DoctrineAttributeChecker\Checker\DoctrineMapping;
 use Slevomat\DoctrineAttributeChecker\Checker\FactoryMetadataTestCase;
 use Slevomat\DoctrineAttributeChecker\Checker\Identifiers;
 use Slevomat\DoctrineAttributeChecker\Configuration\ConfigurationLoader;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNarrowerRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
@@ -33,6 +34,7 @@ final class RuleSetFactoryTest extends FactoryMetadataTestCase
 	public function testRuleSetWithoutDatabaseContainsNoDatabaseRules(): void
 	{
 		$expectedRuleClasses = array_values(array_diff(RuleSetFactory::RULE_CLASSES, [
+			DatabaseColumnNarrowerRule::class,
 			DatabaseColumnNotInsertedRule::class,
 			DatabaseColumnRule::class,
 			DatabaseDiscriminatorColumnRule::class,
