@@ -14,6 +14,7 @@ parameters:
 		- tests/Checker/data/Inheritance/InheritanceEntities.php
 		- tests/Checker/data/Embeddable/EmbeddableEntities.php
 		- tests/Checker/data/NullableEmbedded/NullableEmbeddedEntities.php
+		- tests/Checker/data/Insert/InsertEntities.php
 	excludePaths:
 		- tests/*/data/*
 	checkMissingOverrideMethodAttribute: true

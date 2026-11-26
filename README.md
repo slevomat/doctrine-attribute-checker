@@ -8,6 +8,10 @@ optionally, against the actual MySQL database schema. Most findings can be fixed
 - Forbids configured attributes, arguments and options (e.g. `Index`, `Column.options.default`).
 - With `--db`, compares columns, types, lengths, precision, nullability, unsigned/fixed/collation options,
   join columns, foreign keys and unique indexes with the database.
+- With `--db`, reports `NOT NULL` columns without a default value that an entity does not insert
+  (`database.column-not-inserted`), e.g. a column added to the database before the application maps it,
+  a column of another single table inheritance subclass or an additional column of a ManyToMany join table.
+  Auto-increment and generated columns are filled by the database; entities of joined inheritance are skipped.
 - Supports a baseline of known violations, similar to PHPStan.
 
 ### Inheritance and embeddables

@@ -9,6 +9,8 @@ use function array_intersect_key;
 use function array_key_exists;
 use function count;
 use function is_numeric;
+use function preg_match;
+use function str_contains;
 use function str_replace;
 use function strtolower;
 use function strtoupper;
@@ -59,7 +61,7 @@ final class DatabaseSchemaSnapshot
 		$columns = [];
 		foreach ($connection->fetchAllAssociative(
 			$queryPrefix . 'SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, '
-			. 'NUMERIC_PRECISION, NUMERIC_SCALE, COLLATION_NAME '
+			. 'NUMERIC_PRECISION, NUMERIC_SCALE, COLLATION_NAME, COLUMN_DEFAULT, EXTRA '
 			. 'FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ?',
 			[$schema],
 		) as $row) {
@@ -76,6 +78,9 @@ final class DatabaseSchemaSnapshot
 			$scale = $row['NUMERIC_SCALE'] ?? null;
 			$collation = $row['COLLATION_NAME'] ?? null;
 			Assert::nullOrString($collation);
+			$extra = $row['EXTRA'] ?? null;
+			Assert::nullOrString($extra);
+			$extra = strtolower($extra ?? '');
 
 			$columns[$tableName][$columnName] = new DatabaseColumn(
 				strtolower($row['DATA_TYPE']),
@@ -85,6 +90,9 @@ final class DatabaseSchemaSnapshot
 				is_numeric($scale) ? (int) $scale : null,
 				$row['IS_NULLABLE'] === 'YES',
 				$collation,
+				($row['COLUMN_DEFAULT'] ?? null) !== null,
+				str_contains($extra, 'auto_increment'),
+				preg_match('~\b(virtual|stored) generated\b|\bpersistent\b~', $extra) === 1,
 			);
 		}
 
@@ -204,6 +212,14 @@ final class DatabaseSchemaSnapshot
 	public function getColumn(string $table, string $column): ?DatabaseColumn
 	{
 		return $this->columns[self::normalizeIdentifier($table)][self::normalizeIdentifier($column)] ?? null;
+	}
+
+	/**
+	 * @return array<string, DatabaseColumn>
+	 */
+	public function getColumns(string $table): array
+	{
+		return $this->columns[self::normalizeIdentifier($table)] ?? [];
 	}
 
 	public function isSingleColumnUnique(string $table, string $column): bool
