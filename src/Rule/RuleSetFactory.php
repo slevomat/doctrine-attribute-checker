@@ -9,6 +9,7 @@ use Slevomat\DoctrineAttributeChecker\Checker\DoctrineMapping;
 use Slevomat\DoctrineAttributeChecker\Checker\Identifiers;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNarrowerRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
@@ -51,6 +52,7 @@ final class RuleSetFactory
 		ColumnTypeRule::class,
 		ColumnArgumentsRule::class,
 		DatabaseColumnRule::class,
+		DatabaseColumnNarrowerRule::class,
 		ColumnOrderRule::class,
 		ColumnEmptyParenthesesRule::class,
 		JoinColumnRule::class,
@@ -78,6 +80,7 @@ final class RuleSetFactory
 	): RuleSet
 	{
 		$databaseColumnRule = null;
+		$databaseColumnNarrowerRule = null;
 		$databaseJoinColumnRule = null;
 		$databaseDiscriminatorColumnRule = null;
 		$databaseTableRule = null;
@@ -88,6 +91,7 @@ final class RuleSetFactory
 			$comparator = new DatabaseColumnComparator($mapping, $databaseSchema);
 			$expectationApplier = new DatabaseExpectationApplier();
 			$databaseColumnRule = new DatabaseColumnRule($databaseSchema, $targetResolver, $comparator, $expectationApplier);
+			$databaseColumnNarrowerRule = new DatabaseColumnNarrowerRule($databaseSchema, $targetResolver);
 			$databaseJoinColumnRule = new DatabaseJoinColumnRule($databaseSchema, $targetResolver, $expectationApplier);
 			$databaseDiscriminatorColumnRule = new DatabaseDiscriminatorColumnRule($comparator, $expectationApplier);
 			$databaseTableRule = new DatabaseTableRule($databaseSchema);
@@ -104,6 +108,7 @@ final class RuleSetFactory
 			new ColumnTypeRule($mapping),
 			new ColumnArgumentsRule($configuration),
 			$databaseColumnRule,
+			$databaseColumnNarrowerRule,
 			new ColumnOrderRule($configuration),
 			new ColumnEmptyParenthesesRule($sourceEditor),
 			new JoinColumnRule($mapping, $identifiers),

@@ -18,7 +18,7 @@ use function strtolower;
 final class DatabaseColumnComparator
 {
 
-	private const array LENGTH_DATABASE_TYPES = [
+	public const array LENGTH_DATABASE_TYPES = [
 		'binary',
 		'blob',
 		'char',
