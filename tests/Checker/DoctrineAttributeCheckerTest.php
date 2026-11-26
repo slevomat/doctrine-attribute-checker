@@ -678,7 +678,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 		return [
 			'database column missing' => ['database.column-missing'],
 			'database column type' => ['database.column-type'],
-			'database column nullability' => ['database.column-nullability'],
+			'database column allows null' => ['database.column-allows-null'],
 			'database column unique' => ['database.column-unique'],
 			'database column length' => ['database.column-length'],
 			'database column precision' => ['database.column-precision'],
@@ -688,7 +688,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 			'database column collation' => ['database.column-collation'],
 			'database column definition' => ['database.column-definition'],
 			'database join column missing' => ['database.join-column-missing'],
-			'database join column nullability' => ['database.join-column-nullability'],
+			'database join column rejects null' => ['database.join-column-rejects-null'],
 			'database one-to-one unique' => ['database.one-to-one-unique'],
 			'database join column unique' => ['database.join-column-unique'],
 			'database join column foreign key target' => ['database.join-column-foreign-key-target'],
@@ -736,7 +736,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 				$case['invalidFragment'] = "\t#[ORM\Column]\n\tpublic string \$name;";
 
 				break;
-			case 'database.column-nullability':
+			case 'database.column-allows-null':
 				$case['overrides']['attribute_check_basic.name'] = new DatabaseColumn(
 					'varchar',
 					'varchar(60)',
@@ -874,7 +874,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 				$case['missingColumns'] = ['attribute_check_association.target_id'];
 
 				break;
-			case 'database.join-column-nullability':
+			case 'database.join-column-rejects-null':
 				$case['className'] = FixtureAssociationEntity::class;
 				$case['overrides']['attribute_check_association.target_id'] = new DatabaseColumn(
 					'int',

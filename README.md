@@ -148,7 +148,7 @@ The baseline file has the same format as the `ignoreErrors` section:
 ```neon
 ignoreErrors:
 	-
-		rule: database.column-nullability
+		rule: database.column-allows-null
 		target: App\Entity\User::$name
 		path: src/Entity/User.php
 		message: PHP/Doctrine nullability is not nullable but the database column is nullable.

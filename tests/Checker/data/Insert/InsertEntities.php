@@ -73,3 +73,18 @@ class InsertBikeEntity extends InsertVehicleEntity
 {
 
 }
+
+#[ORM\Entity]
+#[ORM\Table(name: 'insert_comment')]
+class InsertCommentEntity
+{
+
+	#[ORM\Id]
+	#[ORM\Column(length: 36, options: ['fixed' => true])]
+	public string $id;
+
+	#[ORM\ManyToOne]
+	#[ORM\JoinColumn(nullable: false)]
+	public InsertArticleEntity $article;
+
+}

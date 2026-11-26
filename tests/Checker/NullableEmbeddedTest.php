@@ -26,7 +26,7 @@ final class NullableEmbeddedTest extends FactoryMetadataTestCase
 		]), false);
 
 		self::assertSame(
-			['database.column-nullability: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
+			['database.column-allows-null: PHP/Doctrine nullability is not nullable but the database column is nullable.'],
 			$this->formatViolations($result['violations'], 'database.'),
 		);
 	}

@@ -35,8 +35,9 @@ final class DatabaseJoinColumnRule implements AttributeRule
 	{
 		return [
 			'database.join-column-foreign-key-target',
+			'database.join-column-allows-null',
 			'database.join-column-missing',
-			'database.join-column-nullability',
+			'database.join-column-rejects-null',
 			'database.join-column-unique',
 			'database.one-to-one-unique',
 		];
@@ -106,15 +107,19 @@ final class DatabaseJoinColumnRule implements AttributeRule
 		}
 
 		$expectedNullable = $joinColumnMapping->nullable ?? true;
-		if ($databaseColumn->nullable !== $expectedNullable && !($target->singleTableSubclass && $databaseColumn->nullable)) {
+		if ($expectedNullable && !$databaseColumn->nullable) {
 			$reporter->addViolation(
 				$context,
-				'database.join-column-nullability',
-				sprintf(
-					'Doctrine join-column nullability is %s but the database column is %s.',
-					$expectedNullable ? 'nullable' : 'not nullable',
-					$databaseColumn->nullable ? 'nullable' : 'not nullable',
-				),
+				'database.join-column-rejects-null',
+				'Doctrine join-column nullability is nullable but the database column is not nullable.',
+			);
+		}
+
+		if (!$expectedNullable && $databaseColumn->nullable && !$target->singleTableSubclass) {
+			$reporter->addViolation(
+				$context,
+				'database.join-column-allows-null',
+				'Doctrine join-column nullability is not nullable but the database column is nullable.',
 			);
 		}
 

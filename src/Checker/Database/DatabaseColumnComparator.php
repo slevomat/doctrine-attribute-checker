@@ -93,26 +93,19 @@ final class DatabaseColumnComparator
 			);
 		}
 
-		if (
-			$fieldMapping->nullable !== null
-			&& $databaseColumn->nullable !== $fieldMapping->nullable
-			&& !(
-				$nullableColumnAllowed
-				&& $databaseColumn->nullable
-			)
-			&& !(
-				$nullableInEmbeddingTable
-				&& $fieldMapping->nullable
-			)
-		) {
+		if ($fieldMapping->nullable === true && !$databaseColumn->nullable && !$nullableInEmbeddingTable) {
 			$reporter->addViolation(
 				$context,
-				'database.column-nullability',
-				sprintf(
-					'PHP/Doctrine nullability is %s but the database column is %s.',
-					$fieldMapping->nullable ? 'nullable' : 'not nullable',
-					$databaseColumn->nullable ? 'nullable' : 'not nullable',
-				),
+				'database.column-rejects-null',
+				'PHP/Doctrine nullability is nullable but the database column is not nullable.',
+			);
+		}
+
+		if ($fieldMapping->nullable === false && $databaseColumn->nullable && !$nullableColumnAllowed) {
+			$reporter->addViolation(
+				$context,
+				'database.column-allows-null',
+				'PHP/Doctrine nullability is not nullable but the database column is nullable.',
 			);
 		}
 
