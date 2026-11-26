@@ -814,6 +814,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 					0,
 					false,
 					null,
+					autoIncrement: true,
 				);
 				$case['sourceFragment'] = "\t#[ORM\Column]\n\tpublic int \$id;";
 				$case['invalidFragment'] = "\t#[ORM\Column]\n\tpublic int \$id;";
@@ -987,10 +988,10 @@ class DoctrineAttributeCheckerTest extends TestCase
 		}
 
 		$columns = [
-			'attribute_check_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_association.target_id' => new DatabaseColumn('int', 'int', null, 10, 0, true, null),
 			'attribute_check_association.single_id' => new DatabaseColumn('int', 'int', null, 10, 0, true, null),
-			'attribute_check_composite_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_composite_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_composite_association.target_id' => new DatabaseColumn(
 				'int',
 				'int',
@@ -1009,7 +1010,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 				true,
 				null,
 			),
-			'attribute_check_composite_target.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_composite_target.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_composite_target.sequence' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
 			'attribute_check_association_target.attribute_check_association_id' => new DatabaseColumn(
 				'int',
@@ -1029,8 +1030,8 @@ class DoctrineAttributeCheckerTest extends TestCase
 				false,
 				null,
 			),
-			'attribute_check_basic.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
-			'attribute_check_boolean.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_basic.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
+			'attribute_check_boolean.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_boolean.enabled' => new DatabaseColumn(
 				'tinyint',
 				'tinyint(1) unsigned',
@@ -1068,7 +1069,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 				false,
 				null,
 			),
-			'attribute_check_reserved.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_reserved.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_reserved.order' => new DatabaseColumn(
 				'varchar',
 				'varchar(60)',
@@ -1078,9 +1079,9 @@ class DoctrineAttributeCheckerTest extends TestCase
 				false,
 				'utf8mb4_general_ci',
 			),
-			'attribute_check_target.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_target.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_target.association_id' => new DatabaseColumn('int', 'int', null, 10, 0, true, null),
-			'attribute_check_typed_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_typed_association.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_typed_association.target_id' => new DatabaseColumn(
 				'int',
 				'int',
@@ -1090,7 +1091,7 @@ class DoctrineAttributeCheckerTest extends TestCase
 				true,
 				null,
 			),
-			'attribute_check_typed_one_to_one.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null),
+			'attribute_check_typed_one_to_one.id' => new DatabaseColumn('int', 'int', null, 10, 0, false, null, autoIncrement: true),
 			'attribute_check_typed_one_to_one.single_id' => new DatabaseColumn(
 				'int',
 				'int',
