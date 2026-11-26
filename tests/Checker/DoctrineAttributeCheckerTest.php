@@ -1128,6 +1128,8 @@ class DoctrineAttributeCheckerTest extends TestCase
 				'NUMERIC_PRECISION' => $column->numericPrecision === null ? null : (string) $column->numericPrecision,
 				'NUMERIC_SCALE' => $column->numericScale === null ? null : (string) $column->numericScale,
 				'COLLATION_NAME' => $column->collation,
+				'COLUMN_DEFAULT' => $column->hasDefault ? '' : null,
+				'EXTRA' => ($column->autoIncrement ? 'auto_increment' : '') . ($column->generated ? 'STORED GENERATED' : ''),
 			];
 		}
 

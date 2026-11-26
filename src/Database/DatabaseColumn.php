@@ -13,6 +13,9 @@ final class DatabaseColumn
 		public readonly ?int $numericScale,
 		public readonly bool $nullable,
 		public readonly ?string $collation,
+		public readonly bool $hasDefault = false,
+		public readonly bool $autoIncrement = false,
+		public readonly bool $generated = false,
 	)
 	{
 	}

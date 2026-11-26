@@ -9,6 +9,7 @@ use Slevomat\DoctrineAttributeChecker\Checker\DoctrineMapping;
 use Slevomat\DoctrineAttributeChecker\Checker\Identifiers;
 use Slevomat\DoctrineAttributeChecker\Configuration\Configuration;
 use Slevomat\DoctrineAttributeChecker\Database\DatabaseSchemaSnapshot;
+use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnNotInsertedRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseDiscriminatorColumnRule;
 use Slevomat\DoctrineAttributeChecker\Rule\Database\DatabaseJoinColumnRule;
@@ -62,6 +63,7 @@ final class RuleSetFactory
 		EmbeddedRule::class,
 		DatabaseDiscriminatorColumnRule::class,
 		DatabaseTableRule::class,
+		DatabaseColumnNotInsertedRule::class,
 		TableAttributeMissingRule::class,
 	];
 
@@ -77,6 +79,7 @@ final class RuleSetFactory
 		$databaseJoinColumnRule = null;
 		$databaseDiscriminatorColumnRule = null;
 		$databaseTableRule = null;
+		$databaseColumnNotInsertedRule = null;
 		if ($databaseSchema !== null) {
 			$targetResolver = new DatabaseTargetResolver($mapping);
 			$comparator = new DatabaseColumnComparator($mapping, $databaseSchema);
@@ -85,6 +88,7 @@ final class RuleSetFactory
 			$databaseJoinColumnRule = new DatabaseJoinColumnRule($databaseSchema, $targetResolver, $expectationApplier);
 			$databaseDiscriminatorColumnRule = new DatabaseDiscriminatorColumnRule($comparator, $expectationApplier);
 			$databaseTableRule = new DatabaseTableRule($databaseSchema);
+			$databaseColumnNotInsertedRule = new DatabaseColumnNotInsertedRule($databaseSchema);
 		}
 
 		$attributeRules = [
@@ -111,6 +115,7 @@ final class RuleSetFactory
 		];
 		$classRules = [
 			$databaseTableRule,
+			$databaseColumnNotInsertedRule,
 			new TableAttributeMissingRule($sourceEditor, $identifiers),
 		];
 
